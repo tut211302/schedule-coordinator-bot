@@ -1,0 +1,92 @@
+{
+    "name": "Schedule Coordinator Bot - Dev Container",
+    "dockerComposeFile": [
+        "../docker-compose.yml",
+        "docker-compose.devcontainer.yml"
+    ],
+    "service": "frontend",
+    "workspaceFolder": "/workspace",
+    "shutdownAction": "stopCompose",
+
+    "customizations": {
+        "vscode": {
+            "settings": {
+                "python.pythonPath": "/usr/local/bin/python",
+                "python.linting.pylintEnabled": true,
+                "python.formatting.provider": "black",
+                "editor.formatOnSave": true,
+                "editor.defaultFormatter": "esbenp.prettier-vscode",
+                "[python]": {
+                    "editor.defaultFormatter": "ms-python.black-formatter",
+                    "editor.formatOnSave": true
+                },
+                "[javascript]": {
+                    "editor.defaultFormatter": "esbenp.prettier-vscode",
+                    "editor.formatOnSave": true
+                },
+                "[javascriptreact]": {
+                    "editor.defaultFormatter": "esbenp.prettier-vscode",
+                    "editor.formatOnSave": true
+                },
+                "[json]": {
+                    "editor.defaultFormatter": "esbenp.prettier-vscode",
+                    "editor.formatOnSave": true
+                },
+                "editor.codeActionsOnSave": {
+                    "source.fixAll.eslint": true
+                },
+                "[markdown]": {
+                    "editor.formatOnSave": true,
+                    "editor.defaultFormatter": "yzhang.markdown-all-in-one"
+                }
+            },
+            "extensions": [
+                "ms-python.python",
+                "ms-python.black-formatter",
+                "ms-python.vscode-pylance",
+                "dbaeumer.vscode-eslint",
+                "esbenp.prettier-vscode",
+                "oderwat.indent-rainbow",
+                "mhutchie.git-graph",
+                "ms-azuretools.vscode-docker",
+                "yzhang.markdown-all-in-one",
+                "eamodio.gitlens",
+                "ms-vscode.makefile-tools"
+            ]
+        }
+    },
+
+    "features": {
+        "ghcr.io/devcontainers/features/node:1": {
+            "nodeVersion": "18"
+        },
+        "ghcr.io/devcontainers/features/python:1": {
+            "version": "3.11"
+        },
+        "ghcr.io/devcontainers/features/git:1": {}
+    },
+
+    "forwardPorts": [3000, 8000, 3306],
+    "portAttributes": {
+        "3000": {
+            "label": "Frontend (React)",
+            "onAutoForward": "notify"
+        },
+        "8000": {
+            "label": "Backend (FastAPI)",
+            "onAutoForward": "notify"
+        },
+        "3306": {
+            "label": "MySQL Database",
+            "onAutoForward": "silent"
+        }
+    },
+
+    "postCreateCommand": "/bin/bash .devcontainer/post-create.sh",
+
+    "remoteUser": "node",
+
+    "mounts": [
+        "source=${localEnv:HOME}${localEnv:USERPROFILE}/.ssh,target=/home/node/.ssh,readonly"
+    ]
+}

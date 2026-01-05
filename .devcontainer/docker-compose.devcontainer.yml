@@ -1,0 +1,16 @@
+version: '3.8'
+
+services:
+  frontend:
+    command: npm start
+
+  backend:
+    command: sleep infinity
+
+  db:
+    # MySQL設定はそのまま使用
+    environment:
+      MYSQL_ROOT_PASSWORD: root_devpass
+      MYSQL_DATABASE: calendar_db
+      MYSQL_USER: devuser
+      MYSQL_PASSWORD: devpass123
