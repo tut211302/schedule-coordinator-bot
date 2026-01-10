@@ -5,12 +5,17 @@ from typing import Any
 from fastapi import APIRouter, Header, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
-from backend import crud, schemas
-from backend.database import SessionLocal
-from backend.services.line_service import get_line_profile
-from backend.utils.security import verify_line_signature
+from crud import user as crud_user
+from schemas import user as schemas_user
+from database import SessionLocal
+from services.line_service import get_line_profile
+from utils.security import verify_line_signature
+from line.handlers import _route_message, _strip_mention
+from line.reply import reply_text
+from line.config import BOT_MENTION
 
 router = APIRouter()
+ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
 
 
 @router.post("/webhook")
@@ -30,12 +35,21 @@ async def line_webhook(
     body = await request.body()
     body_str = body.decode("utf-8")
 
-    # Verify signature
-    if not verify_line_signature(body_str, x_line_signature):
+    # Debug logging
+    print(f"[LINE Webhook] Received request")
+    print(f"[LINE Webhook] Signature: {x_line_signature}")
+    print(f"[LINE Webhook] Body length: {len(body_str)}")
+
+    # Verify signature (skip in development for testing)
+    if not verify_line_signature(body_str, x_line_signature): #ENVIRONMENT == "production" and 
+        print(f"[LINE Webhook] Signature verification failed")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid signature",
         )
+    
+    #if ENVIRONMENT == "development":
+    #    print(f"[LINE Webhook] Signature verification SKIPPED (development mode)")
 
     # Parse JSON
     try:
@@ -78,14 +92,14 @@ async def handle_follow_event(event: dict[str, Any]) -> None:
         profile = await get_line_profile(user_id)
 
         # Create or update user
-        user_data = schemas.user.UserCreate(
+        user_data = schemas_user.UserCreate(
             line_user_id=user_id,
             display_name=profile.get("display_name") if profile else None,
             picture_url=profile.get("picture_url") if profile else None,
             status_message=profile.get("status_message") if profile else None,
         )
 
-        crud.user.create_or_update_user_by_line_id(db, line_user_id=user_id, user_data=user_data)
+        crud_user.create_or_update_user_by_line_id(db, line_user_id=user_id, user_data=user_data)
         print(f"Processed follow event for user {user_id}")
 
     except Exception as e:
@@ -104,30 +118,42 @@ async def handle_message_event(event: dict[str, Any]) -> None:
     db = SessionLocal()
     try:
         user_id = event.get("source", {}).get("userId")
-        message = event.get("message", {}).get("text")
+        raw_message = event.get("message", {}).get("text")
 
-        if not user_id:
+        if not user_id or not raw_message:
             return
 
         # Auto-register user if not exists
-        existing_user = crud.user.get_user_by_line_user_id(db, line_user_id=user_id)
+        existing_user = crud_user.get_user_by_line_user_id(db, line_user_id=user_id)
         if not existing_user:
             # Fetch profile and register
             profile = await get_line_profile(user_id)
-            user_data = schemas.user.UserCreate(
+            user_data = schemas_user.UserCreate(
                 line_user_id=user_id,
                 display_name=profile.get("display_name") if profile else None,
                 picture_url=profile.get("picture_url") if profile else None,
                 status_message=profile.get("status_message") if profile else None,
             )
-            crud.user.create_user(db=db, user=user_data)
+            crud_user.create_user(db=db, user=user_data)
             print(f"Auto-registered user {user_id} from message event")
 
-        print(f"Message from {user_id}: {message}")
-        # Future: Route to AI or poll logic here
+        # Process message with handlers
+        message = _strip_mention(event, raw_message, BOT_MENTION)
+        print(f"[LINE] Processing message: {message}")
+        
+        reply_token = event.get("replyToken")
+        response = await _route_message(event, message)
+        
+        if reply_token and response:
+            print(f"[LINE] Sending reply: {response}")
+            await reply_text(reply_token, response)
+        else:
+            print(f"[LINE] No response to send (reply_token={reply_token}, response={response})")
 
     except Exception as e:
         print(f"Error handling message event: {e}")
+        import traceback
+        traceback.print_exc()
     finally:
         db.close()
 

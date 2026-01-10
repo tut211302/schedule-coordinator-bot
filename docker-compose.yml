@@ -44,7 +44,7 @@ services:
       BOT_MENTION: ${BOT_MENTION:-}
       FRONTEND_BASE_URL: ${FRONTEND_BASE_URL:-http://localhost:3000}
       LIFF_ID: ${LIFF_ID:-}
-      ENVIRONMENT: development
+      ENVIRONMENT: ${ENVIRONMENT:-development}
     depends_on:
       db:
         condition: service_healthy

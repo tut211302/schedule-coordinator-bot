@@ -11,7 +11,7 @@ from dotenv import load_dotenv
 
 from line.webhook import line_router
 from line.api import line_api_router
-from backend.routers import user, line_auth, google_auth
+from routers import user, line_auth, google_auth
 
 # Load environment variables
 load_dotenv()

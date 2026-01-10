@@ -1,6 +1,6 @@
 from collections.abc import Generator
 
-from backend.database import SessionLocal
+from database import SessionLocal
 
 
 def get_db() -> Generator:

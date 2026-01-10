@@ -1,7 +1,7 @@
 from sqlalchemy.orm import Session
 
-from backend.models.user import User
-from backend.schemas.user import UserCreate, UserGoogleAuth, UserUpdate
+from models.user import User
+from schemas.user import UserCreate, UserGoogleAuth, UserUpdate
 
 
 def get_user_by_line_user_id(db: Session, line_user_id: str) -> User | None:

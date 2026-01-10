@@ -7,9 +7,10 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
-from backend import crud, schemas
-from backend.dependencies import get_db
-from backend.services.google_service import get_google_client
+from crud import user as crud_user
+from schemas import user as schemas_user
+from dependencies import get_db
+from services.google_service import get_google_client
 
 router = APIRouter()
 
@@ -30,7 +31,7 @@ async def google_login(line_user_id: str, db: Session = Depends(get_db)):
         Redirect to Google authorization page
     """
     # Verify user exists
-    db_user = crud.user.get_user_by_line_user_id(db, line_user_id=line_user_id)
+    db_user = crud_user.get_user_by_line_user_id(db, line_user_id=line_user_id)
     if not db_user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
@@ -71,7 +72,7 @@ async def google_callback(
     line_user_id = _state_store.pop(state)
 
     # Get user
-    db_user = crud.user.get_user_by_line_user_id(db, line_user_id=line_user_id)
+    db_user = crud_user.get_user_by_line_user_id(db, line_user_id=line_user_id)
     if not db_user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
@@ -89,13 +90,13 @@ async def google_callback(
         token_expiry = google_client.calculate_expiry_time(expires_in)
 
         # Update user with Google auth data
-        google_auth_data = schemas.user.UserGoogleAuth(
+        google_auth_data = schemas_user.UserGoogleAuth(
             access_token=access_token,
             refresh_token=refresh_token,
             token_expiry=token_expiry,
             calendar_connected=True,
         )
-        crud.user.update_user_google_auth(db=db, db_user=db_user, google_auth_data=google_auth_data)
+        crud_user.update_user_google_auth(db=db, db_user=db_user, google_auth_data=google_auth_data)
 
         # Return success response
         return {
@@ -125,7 +126,7 @@ async def refresh_google_token(line_user_id: str, db: Session = Depends(get_db))
         JSON response with new token expiry
     """
     # Get user
-    db_user = crud.user.get_user_by_line_user_id(db, line_user_id=line_user_id)
+    db_user = crud_user.get_user_by_line_user_id(db, line_user_id=line_user_id)
     if not db_user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
@@ -148,13 +149,13 @@ async def refresh_google_token(line_user_id: str, db: Session = Depends(get_db))
         token_expiry = google_client.calculate_expiry_time(expires_in)
 
         # Update user
-        google_auth_data = schemas.user.UserGoogleAuth(
+        google_auth_data = schemas_user.UserGoogleAuth(
             access_token=access_token,
             refresh_token=new_refresh_token,
             token_expiry=token_expiry,
             calendar_connected=True,
         )
-        crud.user.update_user_google_auth(db=db, db_user=db_user, google_auth_data=google_auth_data)
+        crud_user.update_user_google_auth(db=db, db_user=db_user, google_auth_data=google_auth_data)
 
         return {
             "success": True,
@@ -182,13 +183,13 @@ async def disconnect_google(line_user_id: str, db: Session = Depends(get_db)):
     Returns:
         JSON response
     """
-    db_user = crud.user.get_user_by_line_user_id(db, line_user_id=line_user_id)
+    db_user = crud_user.get_user_by_line_user_id(db, line_user_id=line_user_id)
     if not db_user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
     try:
         # Clear Google auth data
-        update_data = schemas.user.UserUpdate(
+        update_data = schemas_user.UserUpdate(
             google_connected=False,
         )
         # Manually clear tokens
