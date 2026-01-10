@@ -43,7 +43,8 @@ async def google_login(line_user_id: str, db: Session = Depends(get_db)):
     google_client = get_google_client()
     auth_url = google_client.get_auth_url(state)
 
-    return RedirectResponse(url=auth_url)
+    # Return auth_url as JSON so frontend can redirect manually
+    return {"auth_url": auth_url}
 
 
 @router.get("/callback")
@@ -98,18 +99,20 @@ async def google_callback(
         )
         crud_user.update_user_google_auth(db=db, db_user=db_user, google_auth_data=google_auth_data)
 
-        # Return success response
-        return {
-            "success": True,
-            "message": "Google Calendar connected successfully",
-            "line_user_id": line_user_id,
-        }
+        # Redirect to frontend with success message
+        frontend_url = os.getenv("FRONTEND_BASE_URL", "http://localhost:3000")
+        return RedirectResponse(
+            url=f"{frontend_url}?google_auth=success",
+            status_code=status.HTTP_302_FOUND
+        )
 
     except Exception as e:
         print(f"Error in Google callback: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to process Google callback: {str(e)}",
+        # Redirect to frontend with error message
+        frontend_url = os.getenv("FRONTEND_BASE_URL", "http://localhost:3000")
+        return RedirectResponse(
+            url=f"{frontend_url}?google_auth=error",
+            status_code=status.HTTP_302_FOUND
         )
 
 
