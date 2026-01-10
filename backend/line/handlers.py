@@ -6,22 +6,20 @@ from line.config import BOT_MENTION, FRONTEND_BASE_URL, LIFF_ID
 from line.reply import reply_text
 from db.poll import (
     close_session,
-    create_session,
     delete_option,
-    generate_default_options,
     get_active_session,
     list_options,
     record_vote,
     update_session_settings,
-    update_session_state,
     add_option,
 )
-
-DEFAULT_PROMPT = (
-    "デフォルト候補を自動で作成しますか？\n"
-    "期間: 今日〜14日 / 平日19:00-21:00 / 週末18:00-20:00\n"
-    "OKなら「OK」、変更するなら「期間 10日」「時間帯 19:00-21:00」を送ってください。"
+from usecases.poll_usecase import (
+    confirm_default_candidates,
+    confirm_poll,
+    start_poll_flow,
 )
+from usecases.restaurant_usecase import summarize_conditions, update_conditions
+from ai.router import route_message
 
 HELP_TEXT = (
     "使い方:\n"
@@ -173,9 +171,11 @@ async def _route_message(event: Dict[str, Any], message: str) -> Optional[str]:
 
     if session and session["state"] == "pending_defaults":
         if message in {"OK", "ok", "はい", "開始", "デフォルト"}:
-            generate_default_options(session["id"], session["settings"])
-            update_session_state(session["id"], "voting")
-            link = _poll_link(session["id"])
+            result = confirm_default_candidates(group_id)
+            if not result:
+                return "投票の状態が見つかりませんでした。"
+            _, session_id = result
+            link = _poll_link(session_id)
             return f"投票ページ: {link}"
 
         if message.startswith("期間"):
@@ -201,12 +201,8 @@ async def _route_message(event: Dict[str, Any], message: str) -> Optional[str]:
             return f"時間帯を{start_time}-{end_time}に更新しました。\nOKで候補を作成します。"
 
     if message.startswith("開始"):
-        if session:
-            options = list_options(session["id"])
-            return "すでに進行中の投票があります。\n" + _format_options(options)
         topic = message.replace("開始", "", 1).strip() or "予定調整"
-        create_session(group_id, topic, user_id)
-        return f"「{topic}」の投票を開始します。\n{DEFAULT_PROMPT}"
+        return start_poll_flow(group_id, user_id, topic)
 
     if message.startswith("候補"):
         if not session:
@@ -245,15 +241,9 @@ async def _route_message(event: Dict[str, Any], message: str) -> Optional[str]:
         match = re.search(r"(\d+)", message)
         if not match:
             return "確定する候補番号を指定してください。（例: 確定 1）"
-        options = list_options(session["id"])
         index = int(match.group(1))
-        if index < 1 or index > len(options):
-            return "指定の候補番号が見つかりません。"
-        chosen = options[index - 1]
-        close_session(session["id"])
-        start = chosen["start_time"].strftime("%m/%d %H:%M")
-        end = chosen["end_time"].strftime("%H:%M")
-        return f"候補を確定しました。{start}-{end}"
+        result = confirm_poll(group_id, index)
+        return result or "進行中の投票がありません。"
 
     if re.fullmatch(r"\d+", message):
         if not session:
@@ -266,4 +256,27 @@ async def _route_message(event: Dict[str, Any], message: str) -> Optional[str]:
         options = list_options(session["id"])
         return "投票を受け付けました。\n" + _format_options(options)
 
+    try:
+        router_result = await route_message(message, context={"group_id": group_id, "user_id": user_id})
+    except Exception:
+        return None
+
+    action = router_result.get("action")
+    params = router_result.get("params", {}) if isinstance(router_result, dict) else {}
+    if action == "start_poll":
+        topic = params.get("topic") or "予定調整"
+        return start_poll_flow(group_id, user_id, topic)
+    if action == "help":
+        return HELP_TEXT
+    if action == "confirm":
+        confirm_index = params.get("confirm_index")
+        if isinstance(confirm_index, int):
+            result = confirm_poll(group_id, confirm_index)
+            return result or "進行中の投票がありません。"
+        return "確定する候補番号を指定してください。（例: 確定 1）"
+    if action == "find_restaurant":
+        restaurant = params.get("restaurant") or {}
+        return update_conditions(group_id, session["id"] if session else None, restaurant)
+    if action == "tally":
+        return summarize_conditions(group_id)
     return None
