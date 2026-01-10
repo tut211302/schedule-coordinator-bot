@@ -133,6 +133,23 @@ CREATE TABLE IF NOT EXISTS poll_votes (
     INDEX idx_line_user_id (line_user_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- Poll responses table (for storing user's selected dates)
+-- This table stores individual date selections from the voting UI
+CREATE TABLE IF NOT EXISTS poll_responses (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    line_user_id VARCHAR(64) NOT NULL,
+    session_id INT,
+    selected_date VARCHAR(255) NOT NULL,
+    start_time DATETIME,
+    end_time DATETIME,
+    is_late BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_line_user_id (line_user_id),
+    INDEX idx_session_id (session_id),
+    INDEX idx_selected_date (selected_date)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- Sample data (development only)
 INSERT INTO users (email, calendar_connected) VALUES
 ('test@example.com', FALSE)

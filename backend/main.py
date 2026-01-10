@@ -12,6 +12,7 @@ from dotenv import load_dotenv
 from line.webhook import line_router
 from line.api import line_api_router
 from routers import user, line_auth, google_auth
+from api.vote import vote_router
 
 # Load environment variables
 load_dotenv()
@@ -25,8 +26,10 @@ app = FastAPI(
 # CORS設定
 ALLOWED_ORIGINS = [
     "http://localhost:3000",
+    "http://localhost:3001",  # ポート3001を追加
     "http://localhost:8000",
     "http://127.0.0.1:3000",
+    "http://127.0.0.1:3001",  # ポート3001を追加
     "http://127.0.0.1:8000",
 ]
 
@@ -74,6 +77,7 @@ app.include_router(google_auth.router, prefix="/google", tags=["Google認証"])
 # 既存の LINE Webhook ルーター（/webhook/line で既存の投票機能など）
 app.include_router(line_router, tags=["LINE (既存)"])
 app.include_router(line_api_router)
+app.include_router(vote_router, tags=["投票"])
 
 
 if __name__ == "__main__":
