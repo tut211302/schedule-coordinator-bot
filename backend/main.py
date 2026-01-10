@@ -14,6 +14,7 @@ from line.webhook import line_router
 from line.api import line_api_router
 
 from services.hp_services import search_restaurants
+from services.hp_services import get_location
 
 # Load environment variables
 load_dotenv()
@@ -128,7 +129,10 @@ async def startup_event():
     shops = search_restaurants(
             area_code = "Z011",
             genre_code = "G001",
-            count=10
+            count = 10,
+            min_price = 3000,
+            max_price = 20000,
+            location_name = "石川県金沢駅",
             )
 
     if shops:
@@ -140,6 +144,7 @@ async def startup_event():
             print(f" 定休日:{shop.get('close')}",flush=True)
             print(f" {shop.get('urls').get('pc')}",flush=True)
     else:
-        print("search error",flush=True)
+        print("No result",flush=True)
 
     print("--------------HOTPEPPER SERCH TEST END----------------",flush=True)
+
