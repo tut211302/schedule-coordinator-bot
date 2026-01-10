@@ -43,6 +43,7 @@ services:
       LINE_CHANNEL_ACCESS_TOKEN: ${LINE_CHANNEL_ACCESS_TOKEN:-}
       BOT_MENTION: ${BOT_MENTION:-}
       FRONTEND_BASE_URL: ${FRONTEND_BASE_URL:-http://localhost:3000}
+      LIFF_ID: ${LIFF_ID:-}
       ENVIRONMENT: development
     depends_on:
       db:
