@@ -13,6 +13,8 @@ from dotenv import load_dotenv
 from line.webhook import line_router
 from line.api import line_api_router
 from api.vote import vote_router
+from api.survey import survey_router
+from api.vote_completion import vote_completion_router
 
 # Load environment variables
 load_dotenv()
@@ -125,6 +127,8 @@ async def disconnect_calendar():
 app.include_router(line_router)
 app.include_router(line_api_router)
 app.include_router(vote_router)
+app.include_router(survey_router)
+app.include_router(vote_completion_router)
 
 
 if __name__ == "__main__":

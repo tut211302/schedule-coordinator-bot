@@ -145,6 +145,21 @@ CREATE TABLE IF NOT EXISTS poll_responses (
     INDEX idx_selected_date (selected_date)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- Restaurant search conditions (user preferences for Hotpepper API)
+CREATE TABLE IF NOT EXISTS restaurant_conditions (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    line_user_id VARCHAR(64) NOT NULL,
+    session_id INT,
+    area VARCHAR(255),
+    genre_codes JSON,
+    budget_code VARCHAR(10),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uniq_user_session (line_user_id, session_id),
+    INDEX idx_line_user_id (line_user_id),
+    INDEX idx_session_id (session_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- Sample data (development only)
 INSERT INTO users (email, calendar_connected) VALUES
 ('test@example.com', FALSE)

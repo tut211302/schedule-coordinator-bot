@@ -1,5 +1,5 @@
-import React, { useEffect, useState, useMemo, useCallback } from 'react';
-import { useParams } from 'react-router-dom';
+﻿import React, { useEffect, useState, useMemo, useCallback } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 
 const backendUrl = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8000';
@@ -62,6 +62,7 @@ function getVoteIntensityClass(votes, maxVotes) {
 
 export default function PollPlaceholder() {
   const { sessionId: pathSessionId } = useParams();
+  const navigate = useNavigate();
   const [status, setStatus] = useState('');
   const [lineUserId, setLineUserId] = useState('');
   const [sessionId, setSessionId] = useState(pathSessionId || '');
@@ -78,6 +79,9 @@ export default function PollPlaceholder() {
   // Google連携ポップアップ用のstate
   const [showGooglePrompt, setShowGooglePrompt] = useState(false);
   const [isVoteSaved, setIsVoteSaved] = useState(false);
+
+  // アンケートへの遷移確認用のstate
+  const [showSurveyPrompt, setShowSurveyPrompt] = useState(false);
 
   // 候補日時リストを生成（メモ化）
   const candidates = useMemo(() => generateDefaultCandidates(), []);
@@ -247,9 +251,12 @@ export default function PollPlaceholder() {
       // 投票サマリーを更新
       await fetchVoteSummary();
 
-      // 完了メッセージ
+      // 完了メッセージを表示して、お店アンケート画面への遷移を確認
       setStatus('✅ 投票が完了しました！');
       setIsSubmitting(false);
+
+      // アンケートへの遷移確認ダイアログを表示
+      setShowSurveyPrompt(true);
 
     } catch (error) {
       console.error('処理に失敗しました:', error);
@@ -276,6 +283,21 @@ export default function PollPlaceholder() {
   // ポップアップを閉じる
   const handleClosePrompt = () => {
     setShowGooglePrompt(false);
+  };
+
+  // アンケート画面へ遷移
+  const handleGoToSurvey = () => {
+    const surveyPath = sessionId ? `/survey/${sessionId}` : '/survey';
+    navigate(surveyPath);
+  };
+
+  // アンケートをスキップ（LIFFウィンドウを閉じる or 画面に留まる）
+  const handleSkipSurvey = () => {
+    setShowSurveyPrompt(false);
+    // LIFFの場合はウィンドウを閉じる
+    if (window.liff && window.liff.isInClient && window.liff.isInClient()) {
+      window.liff.closeWindow();
+    }
   };
 
   // 候補のラベルから投票数を取得
@@ -508,6 +530,42 @@ export default function PollPlaceholder() {
                   キャンセル
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* お店アンケートへの遷移確認ダイアログ */}
+      {showSurveyPrompt && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[100] p-4">
+          <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-xl">
+            <div className="text-center">
+              <div className="text-5xl mb-4"></div>
+              <h2 className="text-xl font-bold text-gray-800 mb-2">
+                投票完了！
+              </h2>
+              <p className="text-gray-600 mb-6">
+                お店の希望条件（エリアジャンル予算）を入力すると、条件に合ったお店をLINEでお知らせします。
+              </p>
+              
+              <div className="flex flex-col gap-3">
+                <button
+                  onClick={handleGoToSurvey}
+                  className="w-full py-3 px-4 bg-line-green text-white font-bold rounded-xl hover:bg-green-600 transition-colors"
+                >
+                   お店の条件を入力する
+                </button>
+                <button
+                  onClick={handleSkipSurvey}
+                  className="w-full py-3 px-4 bg-gray-100 text-gray-600 font-medium rounded-xl hover:bg-gray-200 transition-colors"
+                >
+                  スキップして終了
+                </button>
+              </div>
+              
+              <p className="text-xs text-gray-400 mt-4">
+                条件は任意です。後から入力することもできます。
+              </p>
             </div>
           </div>
         </div>
