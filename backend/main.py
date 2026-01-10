@@ -3,12 +3,15 @@ FastAPI Backend for Google Calendar Integration
 Main application entry point
 """
 
+import os
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from dotenv import load_dotenv
 
 from line.webhook import line_router
+from line.api import line_api_router
 
 # Load environment variables
 load_dotenv()
@@ -26,6 +29,10 @@ ALLOWED_ORIGINS = [
     "http://127.0.0.1:3000",
     "http://127.0.0.1:8000",
 ]
+
+frontend_base_url = os.getenv("FRONTEND_BASE_URL")
+if frontend_base_url:
+    ALLOWED_ORIGINS.append(frontend_base_url)
 
 app.add_middleware(
     CORSMiddleware,
@@ -100,6 +107,7 @@ async def disconnect_calendar():
 
 
 app.include_router(line_router)
+app.include_router(line_api_router)
 
 
 if __name__ == "__main__":

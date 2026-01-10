@@ -2,7 +2,7 @@ import re
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
-from line.config import BOT_MENTION, FRONTEND_BASE_URL
+from line.config import BOT_MENTION, FRONTEND_BASE_URL, LIFF_ID
 from line.reply import reply_text
 from db.poll import (
     close_session,
@@ -130,6 +130,8 @@ def _format_options(options: List[Dict[str, Any]]) -> str:
 
 
 def _poll_link(session_id: int) -> str:
+    if LIFF_ID:
+        return f"https://liff.line.me/{LIFF_ID}?sessionId={session_id}"
     base = FRONTEND_BASE_URL.rstrip("/")
     return f"{base}/poll/{session_id}"
 

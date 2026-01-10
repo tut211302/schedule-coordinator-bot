@@ -67,6 +67,7 @@ CREATE TABLE IF NOT EXISTS line_users (
     id INT PRIMARY KEY AUTO_INCREMENT,
     line_user_id VARCHAR(64) UNIQUE NOT NULL,
     display_name VARCHAR(255),
+    picture_url TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_line_user_id (line_user_id)
