@@ -37,8 +37,14 @@ services:
       DB_PASSWORD: devpass123
       DB_NAME: calendar_db
       SECRET_KEY: super-secret-dev-key
+      # LINE settings - 追加
+      LINE_CHANNEL_SECRET: ${LINE_CHANNEL_SECRET:-}
+      LINE_CHANNEL_ACCESS_TOKEN: ${LINE_CHANNEL_ACCESS_TOKEN:-}
+      BOT_MENTION: ${BOT_MENTION:-}
+      # Google settings
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI:-http://localhost:3000/auth/google/callback}
       ENVIRONMENT: development
     depends_on:
       db:

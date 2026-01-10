@@ -1,7 +1,7 @@
 [tool.poetry]
-name = "google-calendar-backend"
+name = "schedule-coordinator-backend"
 version = "0.1.0"
-description = "FastAPI backend for Google Calendar integration"
+description = "FastAPI backend for Schedule Coordinator Bot with LINE and Google Calendar integration"
 authors = ["Your Name <you@example.com>"]
 package-mode = false
 
@@ -15,6 +15,7 @@ python-dotenv = "^1.0.0"
 google-auth = "^2.25.2"
 google-auth-httplib2 = "^0.2.0"
 google-auth-oauthlib = "^1.1.0"
+google-api-python-client = "^2.100.0"
 pydantic = "^2.4.2"
 pydantic-settings = "^2.0.3"
 aiohttp = "^3.9.1"

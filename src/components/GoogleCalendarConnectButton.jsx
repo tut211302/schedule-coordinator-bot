@@ -6,27 +6,51 @@ const GoogleCalendarConnectButton = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [userEmail, setUserEmail] = useState(null);
+  const [lineUserId, setLineUserId] = useState(null);
 
   const backendUrl = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8000';
 
-  // 連携状態を取得
+  // URLパラメータまたはlocalStorageからLINE User IDを取得
   useEffect(() => {
-    checkConnectionStatus();
+    const params = new URLSearchParams(window.location.search);
+    const urlLineUserId = params.get('lineUserId');
+    const storedLineUserId = localStorage.getItem('lineUserId');
+    
+    if (urlLineUserId) {
+      setLineUserId(urlLineUserId);
+      localStorage.setItem('lineUserId', urlLineUserId);
+    } else if (storedLineUserId) {
+      setLineUserId(storedLineUserId);
+    }
   }, []);
+
+  // lineUserIdが設定されたら連携状態を確認
+  useEffect(() => {
+    if (lineUserId) {
+      checkConnectionStatus();
+    } else {
+      setLoading(false);
+    }
+  }, [lineUserId]);
 
   const checkConnectionStatus = async () => {
     try {
       setLoading(true);
-      const response = await axios.get(`${backendUrl}/api/user/calendar-status`, {
-        withCredentials: true,
-      });
-      setIsConnected(response.data.isConnected);
+      const currentLineUserId = lineUserId || localStorage.getItem('lineUserId');
+      
+      if (!currentLineUserId) {
+        setLoading(false);
+        return;
+      }
+      
+      const response = await axios.get(`${backendUrl}/api/users/${currentLineUserId}`);
+      setIsConnected(response.data.calendar_connected);
       setUserEmail(response.data.email);
       setError(null);
     } catch (err) {
       console.error('連携状態の取得に失敗しました:', err);
       setIsConnected(false);
-      setError(null); // エラーがあってもUIには表示しない（未連携として扱う）
+      setError(null);
     } finally {
       setLoading(false);
     }
@@ -38,9 +62,17 @@ const GoogleCalendarConnectButton = () => {
       setLoading(true);
       setError(null);
       
-      // バックエンドから認証URLを取得
+      const currentLineUserId = lineUserId || localStorage.getItem('lineUserId');
+      
+      if (!currentLineUserId) {
+        setError('LINE User IDが見つかりません。LINEからアクセスしてください。');
+        setLoading(false);
+        return;
+      }
+      
+      // バックエンドから認証URLを取得（lineUserIdを渡す）
       const response = await axios.get(`${backendUrl}/api/auth/google/login`, {
-        withCredentials: true,
+        params: { lineUserId: currentLineUserId }
       });
       
       // Googleの認証ページにリダイレクト
@@ -62,8 +94,10 @@ const GoogleCalendarConnectButton = () => {
       setLoading(true);
       setError(null);
       
-      await axios.post(`${backendUrl}/api/auth/google/disconnect`, {}, {
-        withCredentials: true,
+      const currentLineUserId = lineUserId || localStorage.getItem('lineUserId');
+      
+      await axios.post(`${backendUrl}/api/auth/google/disconnect`, {
+        lineUserId: currentLineUserId
       });
       
       setIsConnected(false);
@@ -81,6 +115,24 @@ const GoogleCalendarConnectButton = () => {
     return (
       <div style={styles.container}>
         <div style={styles.loading}>読み込み中...</div>
+      </div>
+    );
+  }
+
+  // LINE User IDがない場合の表示
+  if (!lineUserId && !localStorage.getItem('lineUserId')) {
+    return (
+      <div style={styles.container}>
+        <div style={styles.card}>
+          <h2 style={styles.title}>Googleカレンダー連携</h2>
+          <div style={styles.error}>
+            LINE User IDが見つかりません。<br />
+            LINEアプリからこのページにアクセスしてください。
+          </div>
+          <p style={styles.description}>
+            テスト用: URLに ?lineUserId=YOUR_LINE_USER_ID を追加してアクセスしてください。
+          </p>
+        </div>
       </div>
     );
   }
@@ -119,7 +171,7 @@ const GoogleCalendarConnectButton = () => {
           </div>
         ) : (
           <div style={styles.disconnectedSection}>
-            <div style={styles.statusBadge}>
+            <div style={styles.statusBadgeDisconnected}>
               <span style={{...styles.statusDot, color: '#999'}}>●</span> 未連携
             </div>
             <p style={styles.description}>
@@ -205,6 +257,16 @@ const styles = {
     fontWeight: '500',
     marginBottom: '16px',
   },
+  statusBadgeDisconnected: {
+    display: 'inline-block',
+    padding: '8px 16px',
+    borderRadius: '20px',
+    backgroundColor: '#f5f5f5',
+    color: '#666',
+    fontSize: '14px',
+    fontWeight: '500',
+    marginBottom: '16px',
+  },
   statusDot: {
     marginRight: '6px',
     color: '#4caf50',
@@ -241,10 +303,6 @@ const styles = {
     borderRadius: '4px',
     cursor: 'pointer',
     transition: 'all 0.2s',
-    ':hover': {
-      backgroundColor: '#f8f8f8',
-      boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-    },
   },
   disconnectButton: {
     width: '100%',
@@ -257,9 +315,6 @@ const styles = {
     borderRadius: '4px',
     cursor: 'pointer',
     transition: 'all 0.2s',
-    ':hover': {
-      backgroundColor: '#d32f2f',
-    },
   },
   googleIcon: {
     width: '20px',
