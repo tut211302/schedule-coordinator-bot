@@ -12,6 +12,7 @@ from dotenv import load_dotenv
 
 from line.webhook import line_router
 from line.api import line_api_router
+from api.vote import vote_router
 
 # Load environment variables
 load_dotenv()
@@ -25,8 +26,10 @@ app = FastAPI(
 # CORS設定
 ALLOWED_ORIGINS = [
     "http://localhost:3000",
+    "http://localhost:3001",  # ポート3001を追加
     "http://localhost:8000",
     "http://127.0.0.1:3000",
+    "http://127.0.0.1:3001",  # ポート3001を追加
     "http://127.0.0.1:8000",
 ]
 
@@ -84,6 +87,19 @@ async def google_callback(code: str, state: str):
     }, status_code=501)
 
 
+@app.get("/api/auth/google/status")
+async def google_auth_status():
+    """
+    Google連携状態を返す
+    TODO: セッションやCookieから実際のユーザー情報を取得して判定する
+    """
+    # 仮実装: 常に未連携として返す（本番では実際の連携状態を返す）
+    return {
+        "connected": False,
+        "email": None
+    }
+
+
 @app.get("/api/user/calendar-status")
 async def get_calendar_status():
     """
@@ -108,6 +124,7 @@ async def disconnect_calendar():
 
 app.include_router(line_router)
 app.include_router(line_api_router)
+app.include_router(vote_router)
 
 
 if __name__ == "__main__":
