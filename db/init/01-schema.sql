@@ -128,6 +128,27 @@ CREATE TABLE IF NOT EXISTS poll_votes (
     INDEX idx_line_user_id (line_user_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- Restaurant search conditions per group/session
+CREATE TABLE IF NOT EXISTS restaurant_conditions (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    group_id VARCHAR(64) NOT NULL,
+    session_id INT NULL,
+    area VARCHAR(255),
+    budget_min INT,
+    budget_max INT,
+    party_size INT,
+    genre VARCHAR(255),
+    date_value DATE,
+    start_time TIME,
+    end_time TIME,
+    time_slot VARCHAR(32),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uniq_group_id (group_id),
+    INDEX idx_group_id (group_id),
+    INDEX idx_session_id (session_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- Sample data (development only)
 INSERT INTO users (email, calendar_connected) VALUES
 ('test@example.com', FALSE)

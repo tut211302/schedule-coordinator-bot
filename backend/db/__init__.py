@@ -12,4 +12,3 @@ def get_connection():
         database=os.getenv("DB_NAME", "calendar_db"),
         autocommit=True,
     )
-
