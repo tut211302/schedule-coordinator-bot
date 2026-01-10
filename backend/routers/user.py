@@ -59,3 +59,29 @@ def delete_user(line_user_id: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
     crud.user.delete_user(db=db, db_user=db_user)
     return None
+
+
+@router.post("/api/line/link", response_model=schemas.user.User, status_code=status.HTTP_200_OK)
+def line_liff_register(user: schemas.user.UserCreate, db: Session = Depends(get_db)):
+    """
+    LIFF アプリから line_user_id を使用してユーザーを登録・更新.
+    既存ユーザーの場合はプロフィール情報を更新、新規の場合は作成.
+    
+    Request body:
+        {
+            "line_user_id": "U1234567890",
+            "display_name": "太郎",
+            "picture_url": "https://...",
+            "status_message": "..."
+        }
+    """
+    if not user.line_user_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="line_user_id is required",
+        )
+
+    # Create or update user by line_user_id
+    db_user = crud.user.create_or_update_user_by_line_id(db, line_user_id=user.line_user_id, user_data=user)
+    return db_user
+    return None
