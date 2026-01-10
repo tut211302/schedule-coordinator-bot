@@ -44,6 +44,7 @@ services:
       BOT_MENTION: ${BOT_MENTION:-}
       FRONTEND_BASE_URL: ${FRONTEND_BASE_URL:-http://localhost:3000}
       LIFF_ID: ${LIFF_ID:-}
+      HOTPEPPER_API_KEY: ${HOTPEPPER_API_KEY:-}
       ENVIRONMENT: development
     depends_on:
       db:

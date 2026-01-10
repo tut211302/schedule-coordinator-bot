@@ -13,6 +13,8 @@ from dotenv import load_dotenv
 from line.webhook import line_router
 from line.api import line_api_router
 
+from services.hp_services import search_restaurants
+
 # Load environment variables
 load_dotenv()
 
@@ -118,3 +120,26 @@ if __name__ == "__main__":
         port=8000,
         reload=True
     )
+
+@app.on_event("startup")
+async def startup_event():
+    print("--------------HOTPEPPER SERCH TEST----------------",flush=True)
+
+    shops = search_restaurants(
+            area_code = "Z011",
+            genre_code = "G001",
+            count=10
+            )
+
+    if shops:
+        for shop in shops:
+            print(f"- {shop.get('name')}  ({shop.get('genre').get('name')})",flush=True)
+            print(f" {shop.get('genre').get('catch')}",flush=True)
+            print(f" 予算:{shop.get('budget',{}).get('average')}",flush=True)
+            print(f" 営業時間:{shop.get('open')}",flush=True)
+            print(f" 定休日:{shop.get('close')}",flush=True)
+            print(f" {shop.get('urls').get('pc')}",flush=True)
+    else:
+        print("search error",flush=True)
+
+    print("--------------HOTPEPPER SERCH TEST END----------------",flush=True)
