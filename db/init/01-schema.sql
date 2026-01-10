@@ -6,14 +6,19 @@ USE calendar_db;
 -- Users table
 CREATE TABLE IF NOT EXISTS users (
     id INT PRIMARY KEY AUTO_INCREMENT,
-    email VARCHAR(255) UNIQUE NOT NULL,
+    line_user_id VARCHAR(255) UNIQUE,
+    email VARCHAR(255) UNIQUE,
     google_id VARCHAR(255) UNIQUE,
     access_token TEXT,
     refresh_token TEXT,
     token_expiry DATETIME,
     calendar_connected BOOLEAN DEFAULT FALSE,
+    display_name VARCHAR(255),
+    picture_url VARCHAR(512),
+    status_message VARCHAR(255),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_line_user_id (line_user_id),
     INDEX idx_email (email),
     INDEX idx_google_id (google_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

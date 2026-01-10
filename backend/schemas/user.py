@@ -5,7 +5,8 @@ from pydantic import BaseModel, Field
 
 
 class UserBase(BaseModel):
-    line_user_id: str = Field(..., max_length=255)
+    line_user_id: Optional[str] = Field(None, max_length=255)
+    email: Optional[str] = Field(None, max_length=255)
     display_name: Optional[str] = Field(None, max_length=255)
     picture_url: Optional[str] = Field(None, max_length=512)
     status_message: Optional[str] = Field(None, max_length=255)
@@ -16,27 +17,28 @@ class UserCreate(UserBase):
 
 
 class UserUpdate(BaseModel):
+    line_user_id: Optional[str] = Field(None, max_length=255)
+    email: Optional[str] = Field(None, max_length=255)
     display_name: Optional[str] = Field(None, max_length=255)
     picture_url: Optional[str] = Field(None, max_length=512)
     status_message: Optional[str] = Field(None, max_length=255)
-    google_connected: Optional[bool] = None
+    calendar_connected: Optional[bool] = None
 
 
 class UserGoogleAuth(BaseModel):
-    google_access_token: str
-    google_refresh_token: Optional[str] = None
-    google_token_expiry: datetime
-    google_token_type: Optional[str] = None
-    google_connected: bool = True
+    access_token: str
+    refresh_token: Optional[str] = None
+    token_expiry: datetime
+    calendar_connected: bool = True
 
 
 class UserInDBBase(UserBase):
     id: int
-    google_connected: bool = False
-    google_access_token: Optional[str] = None
-    google_refresh_token: Optional[str] = None
-    google_token_expiry: Optional[datetime] = None
-    google_token_type: Optional[str] = None
+    google_id: Optional[str] = None
+    calendar_connected: bool = False
+    access_token: Optional[str] = None
+    refresh_token: Optional[str] = None
+    token_expiry: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime
 

@@ -9,12 +9,25 @@ router = APIRouter()
 
 @router.post("/", response_model=schemas.user.User, status_code=status.HTTP_201_CREATED)
 def create_new_user(user: schemas.user.UserCreate, db: Session = Depends(get_db)):
-    existing = crud.user.get_user_by_line_user_id(db, line_user_id=user.line_user_id)
-    if existing:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="LINE user ID already registered",
-        )
+    """Create new user (by line_user_id or email)"""
+    # Check for duplicate line_user_id if provided
+    if user.line_user_id:
+        existing = crud.user.get_user_by_line_user_id(db, line_user_id=user.line_user_id)
+        if existing:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="LINE user ID already registered",
+            )
+
+    # Check for duplicate email if provided
+    if user.email:
+        existing = crud.user.get_user_by_email(db, email=user.email)
+        if existing:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Email already registered",
+            )
+
     return crud.user.create_user(db=db, user=user)
 
 

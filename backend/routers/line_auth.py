@@ -6,7 +6,7 @@ from fastapi import APIRouter, Header, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
 from backend import crud, schemas
-from backend.dependencies import get_db
+from backend.database import SessionLocal
 from backend.services.line_service import get_line_profile
 from backend.utils.security import verify_line_signature
 
@@ -17,7 +17,6 @@ router = APIRouter()
 async def line_webhook(
     request: Request,
     x_line_signature: str = Header(None),
-    db: Session = None,
 ):
     """
     Handle LINE Messaging API Webhook.
@@ -52,31 +51,23 @@ async def line_webhook(
         event_type = event.get("type")
 
         if event_type == "follow":
-            await handle_follow_event(event, db)
+            await handle_follow_event(event)
         elif event_type == "message":
-            await handle_message_event(event, db)
+            await handle_message_event(event)
         elif event_type == "unfollow":
-            await handle_unfollow_event(event, db)
+            await handle_unfollow_event(event)
 
     return {"status": "ok"}
 
 
-async def handle_follow_event(event: dict[str, Any], db: Session = None) -> None:
+async def handle_follow_event(event: dict[str, Any]) -> None:
     """
     Handle FollowEvent: Register new user or update existing user profile.
 
     Args:
         event: LINE event object
-        db: Database session (dependency injection)
     """
-    from backend.database import SessionLocal
-
-    if db is None:
-        db = SessionLocal()
-        should_close = True
-    else:
-        should_close = False
-
+    db = SessionLocal()
     try:
         user_id = event.get("source", {}).get("userId")
         if not user_id:
@@ -86,77 +77,75 @@ async def handle_follow_event(event: dict[str, Any], db: Session = None) -> None
         # Fetch profile from LINE Messaging API
         profile = await get_line_profile(user_id)
 
-        # Check if user already exists
-        existing_user = crud.user.get_user_by_line_user_id(db, line_user_id=user_id)
+        # Create or update user
+        user_data = schemas.user.UserCreate(
+            line_user_id=user_id,
+            display_name=profile.get("display_name") if profile else None,
+            picture_url=profile.get("picture_url") if profile else None,
+            status_message=profile.get("status_message") if profile else None,
+        )
 
-        if existing_user:
-            # Update existing user
-            update_data = schemas.user.UserUpdate(
-                display_name=profile.get("display_name") if profile else None,
-                picture_url=profile.get("picture_url") if profile else None,
-                status_message=profile.get("status_message") if profile else None,
-            )
-            crud.user.update_user(db=db, db_user=existing_user, user_update=update_data)
-            print(f"Updated user {user_id}")
-        else:
-            # Create new user
-            user_create = schemas.user.UserCreate(
+        crud.user.create_or_update_user_by_line_id(db, line_user_id=user_id, user_data=user_data)
+        print(f"Processed follow event for user {user_id}")
+
+    except Exception as e:
+        print(f"Error handling follow event: {e}")
+    finally:
+        db.close()
+
+
+async def handle_message_event(event: dict[str, Any]) -> None:
+    """
+    Handle MessageEvent: Auto-register user if not exists, then route message.
+
+    Args:
+        event: LINE event object
+    """
+    db = SessionLocal()
+    try:
+        user_id = event.get("source", {}).get("userId")
+        message = event.get("message", {}).get("text")
+
+        if not user_id:
+            return
+
+        # Auto-register user if not exists
+        existing_user = crud.user.get_user_by_line_user_id(db, line_user_id=user_id)
+        if not existing_user:
+            # Fetch profile and register
+            profile = await get_line_profile(user_id)
+            user_data = schemas.user.UserCreate(
                 line_user_id=user_id,
                 display_name=profile.get("display_name") if profile else None,
                 picture_url=profile.get("picture_url") if profile else None,
                 status_message=profile.get("status_message") if profile else None,
             )
-            crud.user.create_user(db=db, user=user_create)
-            print(f"Created new user {user_id}")
+            crud.user.create_user(db=db, user=user_data)
+            print(f"Auto-registered user {user_id} from message event")
+
+        print(f"Message from {user_id}: {message}")
+        # Future: Route to AI or poll logic here
 
     except Exception as e:
-        print(f"Error handling follow event: {e}")
+        print(f"Error handling message event: {e}")
     finally:
-        if should_close:
-            db.close()
+        db.close()
 
 
-async def handle_message_event(event: dict[str, Any], db: Session = None) -> None:
-    """
-    Handle MessageEvent: Placeholder for future message routing logic.
-
-    Args:
-        event: LINE event object
-        db: Database session
-    """
-    user_id = event.get("source", {}).get("userId")
-    message = event.get("message", {}).get("text")
-    print(f"Message from {user_id}: {message}")
-    # Future: Route to AI or poll logic here
-
-
-async def handle_unfollow_event(event: dict[str, Any], db: Session = None) -> None:
+async def handle_unfollow_event(event: dict[str, Any]) -> None:
     """
     Handle UnfollowEvent: User blocked or unblocked the bot.
 
     Args:
         event: LINE event object
-        db: Database session
     """
-    from backend.database import SessionLocal
-
-    if db is None:
-        db = SessionLocal()
-        should_close = True
-    else:
-        should_close = False
-
     try:
         user_id = event.get("source", {}).get("userId")
         if not user_id:
             return
 
-        # Optionally mark user as inactive or log the event
+        # Log event (could mark as inactive, cleanup sessions, etc.)
         print(f"User {user_id} unfollowed/blocked the bot")
-        # Future: Deactivate user, clean up sessions, etc.
 
     except Exception as e:
         print(f"Error handling unfollow event: {e}")
-    finally:
-        if should_close:
-            db.close()

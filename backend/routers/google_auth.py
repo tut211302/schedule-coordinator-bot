@@ -90,11 +90,10 @@ async def google_callback(
 
         # Update user with Google auth data
         google_auth_data = schemas.user.UserGoogleAuth(
-            google_access_token=access_token,
-            google_refresh_token=refresh_token,
-            google_token_expiry=token_expiry,
-            google_token_type=token_type,
-            google_connected=True,
+            access_token=access_token,
+            refresh_token=refresh_token,
+            token_expiry=token_expiry,
+            calendar_connected=True,
         )
         crud.user.update_user_google_auth(db=db, db_user=db_user, google_auth_data=google_auth_data)
 
@@ -150,11 +149,10 @@ async def refresh_google_token(line_user_id: str, db: Session = Depends(get_db))
 
         # Update user
         google_auth_data = schemas.user.UserGoogleAuth(
-            google_access_token=access_token,
-            google_refresh_token=new_refresh_token,
-            google_token_expiry=token_expiry,
-            google_token_type=token_type,
-            google_connected=True,
+            access_token=access_token,
+            refresh_token=new_refresh_token,
+            token_expiry=token_expiry,
+            calendar_connected=True,
         )
         crud.user.update_user_google_auth(db=db, db_user=db_user, google_auth_data=google_auth_data)
 

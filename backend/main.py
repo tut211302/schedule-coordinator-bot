@@ -65,14 +65,14 @@ async def health():
 # ユーザー管理 API (F008)
 app.include_router(user.router, prefix="/users", tags=["ユーザー管理"])
 
-# LINE認証 API (F011)
+# LINE認証 API (F011) - 新実装（ユーザー登録・プロフィール取得統合）
 app.include_router(line_auth.router, prefix="/line", tags=["LINE認証"])
 
 # Google認証 API (F012)
 app.include_router(google_auth.router, prefix="/google", tags=["Google認証"])
 
-# 既存の LINE Webhook ルーター
-app.include_router(line_router)
+# 既存の LINE Webhook ルーター（/webhook/line で既存の投票機能など）
+app.include_router(line_router, tags=["LINE (既存)"])
 app.include_router(line_api_router)
 
 
