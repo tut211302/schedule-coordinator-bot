@@ -49,6 +49,7 @@ backend/.coverage
 backend/poetry.lock
 backend/db/__pycache__/
 backend/line/__pycache__/
+backend/services/__pycache__/
 
 # Database
 db_data/
