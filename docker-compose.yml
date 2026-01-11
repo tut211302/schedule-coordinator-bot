@@ -39,12 +39,13 @@ services:
       SECRET_KEY: super-secret-dev-key
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI:-http://localhost:8000/google/callback}
       LINE_CHANNEL_SECRET: ${LINE_CHANNEL_SECRET:-}
       LINE_CHANNEL_ACCESS_TOKEN: ${LINE_CHANNEL_ACCESS_TOKEN:-}
       BOT_MENTION: ${BOT_MENTION:-}
       FRONTEND_BASE_URL: ${FRONTEND_BASE_URL:-http://localhost:3000}
       LIFF_ID: ${LIFF_ID:-}
-      ENVIRONMENT: development
+      ENVIRONMENT: ${ENVIRONMENT:-development}
     depends_on:
       db:
         condition: service_healthy

@@ -13,11 +13,71 @@ const GoogleCalendarConnectButton = () => {
   useEffect(() => {
     checkConnectionStatus();
   }, []);
+    const [lineUserId, setLineUserId] = useState(null);
 
   const checkConnectionStatus = async () => {
+    const liffId = process.env.REACT_APP_LIFF_ID;
     try {
+    const ensureUserRegistered = async (userId, profile) => {
+      try {
+        await axios.post(`${backendUrl}/users/api/line/link`, {
+          line_user_id: userId,
+          display_name: profile?.displayName || null,
+          picture_url: profile?.pictureUrl || null,
+          status_message: profile?.statusMessage || null,
+        });
+      } catch (e) {
+        console.error('ユーザー登録に失敗しました:', e);
+      }
+    };
       setLoading(true);
+    // URLパラメータから認証結果を確認
+    useEffect(() => {
+      const params = new URLSearchParams(window.location.search);
+      const authStatus = params.get('google_auth');
+    
+      if (authStatus === 'success') {
+        alert('Googleカレンダーとの連携が完了しました！');
+        // URLパラメータをクリーンアップ
+        window.history.replaceState({}, document.title, window.location.pathname);
+      } else if (authStatus === 'error') {
+        setError('認証に失敗しました。もう一度お試しください。');
+        window.history.replaceState({}, document.title, window.location.pathname);
+      }
+    }, []);
       const response = await axios.get(`${backendUrl}/api/user/calendar-status`, {
+    // LIFF から LINE ユーザーIDを取得（なければテストIDにフォールバック）
+    useEffect(() => {
+      const init = async () => {
+        try {
+          if (!liffId || !window.liff) {
+            const fallbackId = 'U5728931d86336a001d4b6db931ec9695';
+            setLineUserId(fallbackId);
+            await ensureUserRegistered(fallbackId, null);
+            await checkConnectionStatus(fallbackId);
+            return;
+          }
+
+          await window.liff.init({ liffId });
+          if (!window.liff.isLoggedIn()) {
+            window.liff.login();
+            return;
+          }
+          const profile = await window.liff.getProfile();
+          setLineUserId(profile.userId);
+          await ensureUserRegistered(profile.userId, profile);
+          await checkConnectionStatus(profile.userId);
+        } catch (err) {
+          console.error('LIFF初期化に失敗:', err);
+          const fallbackId = 'U5728931d86336a001d4b6db931ec9695';
+          setLineUserId(fallbackId);
+          await ensureUserRegistered(fallbackId, null);
+          await checkConnectionStatus(fallbackId);
+        }
+      };
+
+      init();
+    }, []);
         withCredentials: true,
       });
       setIsConnected(response.data.isConnected);
@@ -27,9 +87,7 @@ const GoogleCalendarConnectButton = () => {
       console.error('連携状態の取得に失敗しました:', err);
       setIsConnected(false);
       setError(null); // エラーがあってもUIには表示しない（未連携として扱う）
-    } finally {
-      setLoading(false);
-    }
+        const response = await axios.get(`${backendUrl}/users/${userId}`);
   };
 
   // Google認証を開始
@@ -52,12 +110,10 @@ const GoogleCalendarConnectButton = () => {
     }
   };
 
-  // 連携を解除
-  const handleDisconnect = async () => {
-    if (!window.confirm('Googleカレンダーとの連携を解除しますか？')) {
+        const response = await axios.get(`${backendUrl}/google/login/${lineUserId}`);
       return;
     }
-
+        window.location.href = response.data.auth_url;
     try {
       setLoading(true);
       setError(null);
@@ -74,9 +130,7 @@ const GoogleCalendarConnectButton = () => {
       setError('連携の解除に失敗しました。もう一度お試しください。');
     } finally {
       setLoading(false);
-    }
-  };
-
+        await axios.post(`${backendUrl}/google/disconnect/${lineUserId}`);
   if (loading) {
     return (
       <div style={styles.container}>

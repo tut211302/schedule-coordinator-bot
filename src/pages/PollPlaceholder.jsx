@@ -168,20 +168,35 @@ export default function PollPlaceholder() {
         setLineUserId(profile.userId);
         setStatus('');
 
-        // バックエンドにLINEユーザー情報を登録
-        await fetch(`${backendUrl}/api/line/link`, {
+        // Register user to backend
+        const response = await fetch(`${backendUrl}/api/line/link`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             line_user_id: profile.userId,
             display_name: profile.displayName,
             picture_url: profile.pictureUrl,
-            session_id: sessionId || null,
+            status_message: null,
           }),
         });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          console.error('Registration error:', errorData);
+          if (isMounted) {
+            setStatus(`登録エラー: ${errorData.detail || '不明なエラー'}`);
+          }
+          return;
+        }
+
+        const userData = await response.json();
+        if (isMounted) {
+          setStatus(`ユーザー登録完了。ID: ${userData.id}`);
+        }
       } catch (error) {
         if (isMounted) {
-          setStatus('ローカル開発モードで動作中');
+          console.error('Error:', error);
+          setStatus(`初期化または登録に失敗しました: ${error.message}`);
         }
       }
     };

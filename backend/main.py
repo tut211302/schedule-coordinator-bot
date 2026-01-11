@@ -7,11 +7,11 @@ import os
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
 from dotenv import load_dotenv
 
 from line.webhook import line_router
 from line.api import line_api_router
+from routers import user, line_auth, google_auth
 from api.vote import vote_router
 from api.survey import survey_router
 from api.vote_completion import vote_completion_router
@@ -20,9 +20,9 @@ from api.vote_completion import vote_completion_router
 load_dotenv()
 
 app = FastAPI(
-    title="Google Calendar Integration API",
-    description="FastAPI backend for Google Calendar integration with React frontend",
-    version="0.1.0"
+    title="らくらく飲み会幹事Bot Backend API",
+    description="LINE上で飲み会の企画から日程調整、お店選びまでを一元的にサポートするBotのバックエンドAPIです。",
+    version="0.1.0",
 )
 
 # CORS設定
@@ -52,7 +52,7 @@ app.add_middleware(
 async def root():
     """Root endpoint"""
     return {
-        "message": "Google Calendar Integration API",
+        "message": "らくらく飲み会幹事Bot Backend API",
         "version": "0.1.0",
         "docs": "/docs",
         "redoc": "/redoc"
@@ -65,70 +65,24 @@ async def health():
     return {"status": "healthy"}
 
 
-# Google認証関連のエンドポイント（プレースホルダー）
-@app.get("/api/auth/google/login")
-async def google_login():
-    """
-    Google認証開始エンドポイント
-    Googleの認証URLを返す
-    """
-    return JSONResponse({
-        "authUrl": "https://accounts.google.com/o/oauth2/v2/auth?..."
-    }, status_code=501)
+# ========== API ルーター登録 ==========
 
+# ユーザー管理 API (F008)
+app.include_router(user.router, prefix="/users", tags=["ユーザー管理"])
 
-@app.post("/api/auth/google/callback")
-async def google_callback(code: str, state: str):
-    """
-    Google認証コールバックエンドポイント
-    認証コードをアクセストークンと交換
-    """
-    return JSONResponse({
-        "success": False,
-        "message": "Backend implementation required"
-    }, status_code=501)
+# LINE認証 API (F011) - 新実装（ユーザー登録・プロフィール取得統合）
+app.include_router(line_auth.router, prefix="/line", tags=["LINE認証"])
 
+# Google認証 API (F012)
+app.include_router(google_auth.router, prefix="/google", tags=["Google認証"])
 
-@app.get("/api/auth/google/status")
-async def google_auth_status():
-    """
-    Google連携状態を返す
-    TODO: セッションやCookieから実際のユーザー情報を取得して判定する
-    """
-    # 仮実装: 常に未連携として返す（本番では実際の連携状態を返す）
-    return {
-        "connected": False,
-        "email": None
-    }
-
-
-@app.get("/api/user/calendar-status")
-async def get_calendar_status():
-    """
-    ユーザーのカレンダー連携状態を取得
-    """
-    return JSONResponse({
-        "isConnected": False,
-        "email": None
-    }, status_code=501)
-
-
-@app.post("/api/auth/google/disconnect")
-async def disconnect_calendar():
-    """
-    Googleカレンダーとの連携を解除
-    """
-    return JSONResponse({
-        "success": False,
-        "message": "Backend implementation required"
-    }, status_code=501)
-
-
-app.include_router(line_router)
+# 既存の LINE Webhook ルーター（/webhook/line で既存の投票機能など）
+app.include_router(line_router, tags=["LINE (既存)"])
 app.include_router(line_api_router)
-app.include_router(vote_router)
+
 app.include_router(survey_router)
 app.include_router(vote_completion_router)
+app.include_router(vote_router, tags=["投票"])
 
 
 if __name__ == "__main__":
