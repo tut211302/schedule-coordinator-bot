@@ -34,7 +34,7 @@ class GoogleOAuthClient:
             Authorization URL for redirect
         """
         # Scopes for calendar access
-        scopes = "openid profile email https://www.googleapis.com/auth/calendar.events"
+        scopes = "openid profile email https://www.googleapis.com/auth/calendar"
 
         params = {
             "client_id": self.client_id,

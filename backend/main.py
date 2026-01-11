@@ -12,6 +12,7 @@ from dotenv import load_dotenv
 from line.webhook import line_router
 from line.api import line_api_router
 from routers import user, line_auth, google_auth
+from routers.calendar_update import router as calendar_update_router
 from api.vote import vote_router
 from api.survey import survey_router
 from api.vote_completion import vote_completion_router
@@ -83,6 +84,7 @@ app.include_router(line_api_router)
 app.include_router(survey_router)
 app.include_router(vote_completion_router)
 app.include_router(vote_router, tags=["投票"])
+app.include_router(calendar_update_router, tags=["カレンダー更新"])
 
 
 if __name__ == "__main__":
