@@ -1,7 +1,6 @@
 import os
 import secrets
-import json
-from datetime import datetime
+from urllib.parse import urlencode, urlparse, urlunparse, parse_qsl
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import RedirectResponse
@@ -16,11 +15,30 @@ router = APIRouter()
 
 # Simple in-memory state store for CSRF protection
 # In production, use Redis or database
-_state_store: dict[str, str] = {}
+_state_store: dict[str, dict] = {}
+
+
+def _normalize_redirect_url(raw_url: str | None) -> str:
+    frontend_base = os.getenv("FRONTEND_BASE_URL", "http://localhost:3000")
+    if not raw_url:
+        return frontend_base
+    if raw_url.startswith("/"):
+        return frontend_base.rstrip("/") + raw_url
+    if raw_url.startswith(frontend_base):
+        return raw_url
+    return frontend_base
+
+
+def _append_query(url: str, key: str, value: str) -> str:
+    parsed = urlparse(url)
+    query = dict(parse_qsl(parsed.query))
+    query[key] = value
+    new_query = urlencode(query)
+    return urlunparse(parsed._replace(query=new_query))
 
 
 @router.get("/login/{line_user_id}")
-async def google_login(line_user_id: str, db: Session = Depends(get_db)):
+async def google_login(line_user_id: str, redirect_url: str | None = None, db: Session = Depends(get_db)):
     """
     Start Google OAuth flow.
 
@@ -37,7 +55,10 @@ async def google_login(line_user_id: str, db: Session = Depends(get_db)):
 
     # Generate state token for CSRF protection
     state = secrets.token_urlsafe(32)
-    _state_store[state] = line_user_id
+    _state_store[state] = {
+        "line_user_id": line_user_id,
+        "redirect_url": _normalize_redirect_url(redirect_url),
+    }
 
     # Get Google OAuth client
     google_client = get_google_client()
@@ -70,7 +91,9 @@ async def google_callback(
     if state not in _state_store:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid state parameter")
 
-    line_user_id = _state_store.pop(state)
+    state_payload = _state_store.pop(state)
+    line_user_id = state_payload.get("line_user_id")
+    redirect_url = state_payload.get("redirect_url") or os.getenv("FRONTEND_BASE_URL", "http://localhost:3000")
 
     # Get user
     db_user = crud_user.get_user_by_line_user_id(db, line_user_id=line_user_id)
@@ -91,27 +114,30 @@ async def google_callback(
         token_expiry = google_client.calculate_expiry_time(expires_in)
 
         # Update user with Google auth data
+        user_info = await google_client.fetch_user_info(access_token)
         google_auth_data = schemas_user.UserGoogleAuth(
             access_token=access_token,
             refresh_token=refresh_token,
             token_expiry=token_expiry,
             calendar_connected=True,
+            google_id=user_info.get("id"),
+            email=user_info.get("email"),
         )
         crud_user.update_user_google_auth(db=db, db_user=db_user, google_auth_data=google_auth_data)
 
         # Redirect to frontend with success message
-        frontend_url = os.getenv("FRONTEND_BASE_URL", "http://localhost:3000")
+        frontend_url = redirect_url
         return RedirectResponse(
-            url=f"{frontend_url}?google_auth=success",
+            url=_append_query(frontend_url, "google_auth", "success"),
             status_code=status.HTTP_302_FOUND
         )
 
     except Exception as e:
         print(f"Error in Google callback: {e}")
         # Redirect to frontend with error message
-        frontend_url = os.getenv("FRONTEND_BASE_URL", "http://localhost:3000")
+        frontend_url = redirect_url
         return RedirectResponse(
-            url=f"{frontend_url}?google_auth=error",
+            url=_append_query(frontend_url, "google_auth", "error"),
             status_code=status.HTTP_302_FOUND
         )
 

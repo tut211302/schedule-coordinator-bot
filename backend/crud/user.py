@@ -71,6 +71,10 @@ def update_user_google_auth(db: Session, db_user: User, google_auth_data: UserGo
     db_user.refresh_token = google_auth_data.refresh_token
     db_user.token_expiry = google_auth_data.token_expiry
     db_user.calendar_connected = google_auth_data.calendar_connected
+    if google_auth_data.google_id:
+        db_user.google_id = google_auth_data.google_id
+    if google_auth_data.email:
+        db_user.email = google_auth_data.email
     db.add(db_user)
     db.commit()
     db.refresh(db_user)

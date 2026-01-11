@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import axios from 'axios';
 
@@ -10,11 +10,7 @@ const AuthCallback = () => {
 
   const backendUrl = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8000';
 
-  useEffect(() => {
-    handleCallback();
-  }, []);
-
-  const handleCallback = async () => {
+  const handleCallback = useCallback(async () => {
     try {
       // URLからコードとstateを取得
       const code = searchParams.get('code');
@@ -74,7 +70,11 @@ const AuthCallback = () => {
         navigate('/');
       }, 3000);
     }
-  };
+  }, [backendUrl, navigate, searchParams]);
+
+  useEffect(() => {
+    handleCallback();
+  }, [handleCallback]);
 
   return (
     <div style={styles.container}>
