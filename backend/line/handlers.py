@@ -1,9 +1,12 @@
 import re
+from urllib.parse import parse_qs
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
 from line.config import BOT_MENTION, FRONTEND_BASE_URL, LIFF_ID
-from line.reply import reply_text
+from line.reply import reply_messages, reply_text
+from api.hotpepper import create_line_carousel_message, search_restaurants
+from db.restaurant_conditions import get_aggregated_conditions
 from db.poll import (
     close_session,
     create_session,
@@ -31,7 +34,8 @@ HELP_TEXT = (
     "1            -> 投票\n"
     "集計         -> 現在の票数\n"
     "確定 1       -> 確定\n"
-    "削除 3       -> 候補削除"
+    "削除 3       -> 候補削除\n"
+    "予約条件確認 -> 店検索の確認"
 )
 
 
@@ -143,6 +147,43 @@ def _parse_range_days(text: str) -> Optional[int]:
     return int(match.group(1))
 
 
+def _format_condition_summary(conditions: Dict[str, Any]) -> str:
+    lines = []
+    if conditions.get("most_common_area"):
+        lines.append(f"エリア: {conditions['most_common_area']}")
+    if conditions.get("most_common_genres"):
+        genres = ", ".join(conditions["most_common_genres"][:2])
+        lines.append(f"ジャンル: {genres}")
+    if conditions.get("most_common_budget"):
+        lines.append(f"予算: {conditions['most_common_budget']}")
+    if not lines:
+        return "まだ検索条件が集まっていません。"
+    return "\n".join(lines)
+
+
+def _build_condition_confirm_message(session_id: int, conditions: Dict[str, Any]) -> List[Dict[str, Any]]:
+    summary = _format_condition_summary(conditions)
+    text = f"人気上位の検索条件は以下です。\n{summary}\nこの条件でお店を検索しますか？"
+    return [
+        {"type": "text", "text": text[:2000]},
+        {
+            "type": "template",
+            "altText": "お店検索の確認",
+            "template": {
+                "type": "buttons",
+                "text": "この条件でお店検索してもよいですか？",
+                "actions": [
+                    {
+                        "type": "postback",
+                        "label": "この条件で検索",
+                        "data": f"action=search_restaurants&session_id={session_id}",
+                    }
+                ],
+            },
+        },
+    ]
+
+
 async def handle_line_events(events: List[Dict[str, Any]]) -> None:
     """
     Stub handler for LINE events.
@@ -150,6 +191,16 @@ async def handle_line_events(events: List[Dict[str, Any]]) -> None:
     - 現状はログに残すのみ
     """
     for event in events:
+        if event.get("type") == "postback":
+            reply_token = event.get("replyToken")
+            response = await _route_postback(event)
+            if reply_token and response:
+                if isinstance(response, list):
+                    await reply_messages(reply_token, response)
+                else:
+                    await reply_text(reply_token, response)
+            continue
+
         if should_handle_text(event, BOT_MENTION):
             raw_message = event.get("message", {}).get("text", "")
             user_id = event.get("source", {}).get("userId", "")
@@ -170,6 +221,17 @@ async def _route_message(event: Dict[str, Any], message: str) -> Optional[str]:
 
     if message in {"ヘルプ", "help", "?"}:
         return HELP_TEXT
+
+    if message in {"予約条件確認", "条件確認", "店条件確認"}:
+        if not session:
+            return "進行中の投票がありません。"
+        conditions = get_aggregated_conditions(session["id"])
+        if conditions.get("total_respondents", 0) == 0:
+            return "まだ検索条件が集まっていません。"
+        reply_token = event.get("replyToken")
+        if reply_token:
+            await reply_messages(reply_token, _build_condition_confirm_message(session["id"], conditions))
+        return None
 
     if session and session["state"] == "pending_defaults":
         if message in {"OK", "ok", "はい", "開始", "デフォルト"}:
@@ -265,5 +327,52 @@ async def _route_message(event: Dict[str, Any], message: str) -> Optional[str]:
         record_vote(session["id"], options[index - 1]["id"], user_id)
         options = list_options(session["id"])
         return "投票を受け付けました。\n" + _format_options(options)
+
+    return None
+
+
+async def _route_postback(event: Dict[str, Any]) -> Optional[object]:
+    postback = event.get("postback", {})
+    data = postback.get("data", "")
+    params = parse_qs(data)
+    action = params.get("action", [None])[0]
+    session_id = params.get("session_id", [None])[0]
+
+    if action == "search_restaurants":
+        if not session_id or not session_id.isdigit():
+            return "セッションIDが取得できませんでした。"
+        session_id_int = int(session_id)
+        conditions = get_aggregated_conditions(session_id_int)
+        if conditions.get("total_respondents", 0) == 0:
+            return "まだ検索条件が集まっていません。"
+
+        print(
+            "[LINE] search_restaurants session_id="
+            f"{session_id_int} area={conditions.get('most_common_area')} "
+            f"genres={conditions.get('most_common_genres')} "
+            f"budget={conditions.get('most_common_budget')}"
+        )
+        search_result = await search_restaurants(
+            area=conditions.get("most_common_area"),
+            genre_codes=conditions.get("most_common_genres", [])[:3],
+            budget_code=conditions.get("most_common_budget"),
+            count=10,
+        )
+        print(
+            "[LINE] hotpepper results_available="
+            f"{search_result.get('results_available')} "
+            f"results_returned={search_result.get('results_returned')} "
+            f"error={search_result.get('error')}"
+        )
+        shops = search_result.get("shops", [])
+        if not shops:
+            return "条件に合うお店が見つかりませんでした。条件を変えて再度お試しください。"
+
+        summary = _format_condition_summary(conditions)
+        carousel_message = create_line_carousel_message(shops, "🍻 おすすめのお店")
+        return [
+            {"type": "text", "text": f"お店を検索しました。\n{summary}"},
+            carousel_message,
+        ]
 
     return None
