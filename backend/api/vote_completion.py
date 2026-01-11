@@ -57,11 +57,11 @@ def get_vote_results(session_id: int) -> List[Dict]:
     """Get aggregated vote results for a session."""
     query = """
         SELECT 
-            pr.selected_date as date_label,
+            pr.selected_date AS date_label,
             pr.start_time,
             pr.end_time,
-            COUNT(*) as vote_count,
-            GROUP_CONCAT(DISTINCT lu.display_name SEPARATOR ', ') as voters
+            COUNT(*) AS vote_count,
+            GROUP_CONCAT(DISTINCT lu.display_name SEPARATOR ', ') AS voters
         FROM poll_responses pr
         LEFT JOIN line_users lu ON pr.line_user_id = lu.line_user_id
         WHERE pr.session_id = %s
