@@ -14,6 +14,7 @@ from db.poll_responses import (
     get_response_summary,
     delete_user_responses
 )
+from db.deadline import check_deadline_expired
 
 vote_router = APIRouter(tags=["votes"])
 
@@ -64,6 +65,14 @@ async def submit_vote(request: VoteRequest):
     
     if not request.votes:
         raise HTTPException(status_code=400, detail="At least one vote is required")
+    
+    # Check deadline if session_id is provided
+    if request.session_id is not None:
+        if check_deadline_expired(request.session_id):
+            raise HTTPException(
+                status_code=403,
+                detail="投票期限が終了しました。これ以上投票できません。"
+            )
     
     try:
         # Convert VoteItem objects to dictionaries
