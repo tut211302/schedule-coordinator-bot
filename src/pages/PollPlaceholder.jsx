@@ -193,11 +193,6 @@ export default function PollPlaceholder() {
         if (isMounted) {
           console.error('Error:', error);
           setStatus(`初期化または登録に失敗しました: ${error.message}`);
-=======
-      } catch (error) {
-        if (isMounted) {
-          setStatus('ローカル開発モードで動作中');
->>>>>>> 91023047be6652015f1c8244dcc86ee2c1b5751a
         }
       }
     };
