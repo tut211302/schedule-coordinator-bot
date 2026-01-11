@@ -8,6 +8,7 @@ from line.reply import reply_messages, reply_text
 from api.hotpepper import create_line_carousel_message, fetch_restaurant_by_id, search_restaurants
 from db.poll_responses import get_top_voted_slot
 from db.restaurant_conditions import get_aggregated_conditions
+from db.restaurant_votes import get_top_restaurant, save_restaurant_vote
 from utils.hotpepper_codes import get_genre_name, get_budget_name
 from db.poll import (
     close_session,
