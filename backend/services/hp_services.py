@@ -1,4 +1,5 @@
 import requests
+import aiohttp
 import os
 from typing import Optional, Dict, Any, List
 
@@ -23,7 +24,7 @@ BUDGET_LIST=[
         {"code" : "B014", "min" : 30001, "max" : 100000},
         ]
 
-def get_location(location_name: str)->Optional[Dict[str,float]]:
+async def get_location(location_name: str)->Optional[Dict[str,float]]:
     geocode_url = "https://maps.googleapis.com/maps/api/geocode/json"
 
     if not GOOGLE_API_KEY:
@@ -80,7 +81,7 @@ def get_budget_code(min_price: int,max_price: int) -> Optional[str]:
         return None
 
 
-def search_restaurants(
+async def search_restaurants(
         area_code: str = "Z011",
         genre_code: str = "G001",
         count: int = 10,
@@ -93,7 +94,7 @@ def search_restaurants(
         print("HOTPEPPER_API_KEY does not exist")
         return []
     
-    coords = get_location(location_name)
+    coords = await get_location(location_name)
 
     params = {
             "key": HOTPEPPER_API_KEY,

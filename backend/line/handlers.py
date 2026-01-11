@@ -3,7 +3,7 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
 from line.config import BOT_MENTION, FRONTEND_BASE_URL, LIFF_ID
-from line.reply import reply_text
+from line.reply import reply_text, reply_carousel
 from db.poll import (
     close_session,
     create_session,
@@ -16,6 +16,8 @@ from db.poll import (
     update_session_state,
     add_option,
 )
+
+from services.hp_services import search_restaurants
 
 DEFAULT_PROMPT = (
     "デフォルト候補を自動で作成しますか？\n"
@@ -158,12 +160,19 @@ async def handle_line_events(events: List[Dict[str, Any]]) -> None:
             reply_token = event.get("replyToken")
             response = await _route_message(event, message)
             if reply_token and response:
-                await reply_text(reply_token, response)
+                if isinstance(response, str):
+                    await reply_text(reply_token, response)
+                else:
+                    await reply_carousel(
+                            reply_token,
+                            response.get("alt_txt","おすすめのお店"),
+                            response.get("columns",[]),
+                            )
         else:
             print(f"[LINE] skipped event type={event.get('type')}")
 
 
-async def _route_message(event: Dict[str, Any], message: str) -> Optional[str]:
+async def _route_message(event: Dict[str, Any], message: str) -> Optional[Union[str,Dict[str, Any]]]:
     group_id = _conversation_id(event)
     user_id = event.get("source", {}).get("userId", "")
     session = get_active_session(group_id)
