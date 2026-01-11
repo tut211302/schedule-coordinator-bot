@@ -174,6 +174,19 @@ CREATE TABLE IF NOT EXISTS restaurant_conditions (
     INDEX idx_session_id (session_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- Restaurant votes (store selected shops per session)
+CREATE TABLE IF NOT EXISTS restaurant_votes (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    session_id INT NOT NULL,
+    line_user_id VARCHAR(64) NOT NULL,
+    shop_id VARCHAR(64) NOT NULL,
+    shop_name VARCHAR(255),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uniq_vote_per_session_user (session_id, line_user_id),
+    INDEX idx_session_id (session_id),
+    INDEX idx_shop_id (shop_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 -- Adjustment events (voting deadlines per session)
 CREATE TABLE IF NOT EXISTS adjustment_events (
     id INT PRIMARY KEY AUTO_INCREMENT,

@@ -5,8 +5,10 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from line.config import BOT_MENTION, FRONTEND_BASE_URL, LIFF_ID
 from line.reply import reply_messages, reply_text
-from api.hotpepper import create_line_carousel_message, search_restaurants
+from api.hotpepper import create_line_carousel_message, fetch_restaurant_by_id, search_restaurants
+from db.poll_responses import get_top_voted_slot
 from db.restaurant_conditions import get_aggregated_conditions
+from db.restaurant_votes import get_top_restaurant, save_restaurant_vote
 from db.poll import (
     close_session,
     create_session,
@@ -163,7 +165,18 @@ def _format_condition_summary(conditions: Dict[str, Any]) -> str:
 
 def _build_condition_confirm_message(session_id: int, conditions: Dict[str, Any]) -> List[Dict[str, Any]]:
     summary = _format_condition_summary(conditions)
-    text = f"人気上位の検索条件は以下です。\n{summary}\nこの条件でお店を検索しますか？"
+    top_slot = get_top_voted_slot(session_id)
+    lines = [summary]
+    if top_slot:
+        start_time = top_slot.get("start_time")
+        end_time = top_slot.get("end_time")
+        if start_time and end_time:
+            start_text = start_time.strftime("%m/%d %H:%M")
+            end_text = end_time.strftime("%H:%M")
+            lines.append(f"人気日程: {start_text}-{end_text}")
+        elif top_slot.get("selected_date"):
+            lines.append(f"人気日程: {top_slot.get('selected_date')}")
+    text = "人気上位の検索条件は以下です。\n" + "\n".join(lines) + "\nこの条件でお店を検索しますか？"
     return [
         {"type": "text", "text": text[:2000]},
         {
@@ -177,6 +190,49 @@ def _build_condition_confirm_message(session_id: int, conditions: Dict[str, Any]
                         "type": "postback",
                         "label": "この条件で検索",
                         "data": f"action=search_restaurants&session_id={session_id}",
+                    }
+                ],
+            },
+        },
+    ]
+
+
+def _build_shop_confirm_message(session_id: int, top_shop: Dict[str, Any]) -> List[Dict[str, Any]]:
+    shop_name = top_shop.get("shop_name") or "お店"
+    text = f"「{shop_name}」このお店で予約しますか？"
+    return [
+        {
+            "type": "template",
+            "altText": "予約確認",
+            "template": {
+                "type": "buttons",
+                "text": text[:160],
+                "actions": [
+                    {
+                        "type": "postback",
+                        "label": "はい",
+                        "data": f"action=confirm_reservation&session_id={session_id}",
+                    }
+                ],
+            },
+        },
+    ]
+
+
+def _build_reservation_done_message(session_id: int) -> List[Dict[str, Any]]:
+    return [
+        {"type": "text", "text": "予約が完了したら、下のボタンを押してください。"},
+        {
+            "type": "template",
+            "altText": "予約完了",
+            "template": {
+                "type": "buttons",
+                "text": "予約完了したら押してください。",
+                "actions": [
+                    {
+                        "type": "postback",
+                        "label": "予約完了",
+                        "data": f"action=reservation_done&session_id={session_id}",
                     }
                 ],
             },
@@ -231,6 +287,29 @@ async def _route_message(event: Dict[str, Any], message: str) -> Optional[str]:
         reply_token = event.get("replyToken")
         if reply_token:
             await reply_messages(reply_token, _build_condition_confirm_message(session["id"], conditions))
+        return None
+
+    if message in {"人気の店", "人気のお店"}:
+        if not session:
+            return "進行中の投票がありません。"
+        top_shop = get_top_restaurant(session["id"])
+        if not top_shop:
+            return "まだお店の投票が集まっていません。"
+        reply_token = event.get("replyToken")
+        if reply_token:
+            shop_result = await fetch_restaurant_by_id(top_shop.get("shop_id", ""))
+            shops = shop_result.get("shops", [])
+            messages = [{"type": "text", "text": "人気のお店はこちらです。"}]
+            if shops:
+                messages.append(
+                    create_line_carousel_message(
+                        shops,
+                        "人気のお店",
+                        include_vote_action=False,
+                    )
+                )
+            messages.extend(_build_shop_confirm_message(session["id"], top_shop))
+            await reply_messages(reply_token, messages)
         return None
 
     if session and session["state"] == "pending_defaults":
@@ -369,10 +448,35 @@ async def _route_postback(event: Dict[str, Any]) -> Optional[object]:
             return "条件に合うお店が見つかりませんでした。条件を変えて再度お試しください。"
 
         summary = _format_condition_summary(conditions)
-        carousel_message = create_line_carousel_message(shops, "🍻 おすすめのお店")
+        carousel_message = create_line_carousel_message(
+            shops,
+            "🍻 おすすめのお店",
+            session_id=session_id_int,
+        )
         return [
             {"type": "text", "text": f"お店を検索しました。\n{summary}"},
             carousel_message,
         ]
+
+    if action == "select_shop":
+        if not session_id or not session_id.isdigit():
+            return "セッションIDが取得できませんでした。"
+        shop_id = params.get("shop_id", [None])[0]
+        shop_name = params.get("shop_name", [""])[0]
+        if not shop_id:
+            return "お店IDが取得できませんでした。"
+        session_id_int = int(session_id)
+        user_id = event.get("source", {}).get("userId", "")
+        save_restaurant_vote(user_id, session_id_int, shop_id, shop_name)
+        return None
+
+    if action == "confirm_reservation":
+        if not session_id or not session_id.isdigit():
+            return "セッションIDが取得できませんでした。"
+        session_id_int = int(session_id)
+        return _build_reservation_done_message(session_id_int)
+
+    if action == "reservation_done":
+        return "予約完了を受け付けました。"
 
     return None

@@ -193,6 +193,24 @@ def get_response_summary(session_id: Optional[int] = None) -> Dict:
         }
 
 
+def get_top_voted_slot(session_id: int) -> Optional[Dict]:
+    """
+    Get the most-voted slot for a session.
+    """
+    with get_connection() as conn:
+        cursor = conn.cursor(dictionary=True)
+        query = """
+            SELECT selected_date, start_time, end_time, COUNT(*) AS vote_count
+            FROM poll_responses
+            WHERE session_id = %s
+            GROUP BY selected_date, start_time, end_time
+            ORDER BY vote_count DESC, start_time ASC
+            LIMIT 1
+        """
+        cursor.execute(query, (session_id,))
+        return cursor.fetchone()
+
+
 def delete_user_responses(line_user_id: str, session_id: Optional[int] = None) -> int:
     """
     Delete all responses for a user.
