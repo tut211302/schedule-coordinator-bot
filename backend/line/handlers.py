@@ -1,12 +1,13 @@
 import re
-from datetime import datetime
-from typing import Any, Dict, List, Optional, Tuple
+from datetime import datetime, timedelta
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 from line.config import BOT_MENTION, FRONTEND_BASE_URL, LIFF_ID
-from line.reply import reply_text
+from line.reply import reply_carousel, reply_text
 from db.poll import (
     close_session,
     create_session,
+    clear_options,
     delete_option,
     generate_default_options,
     get_active_session,
@@ -33,6 +34,14 @@ HELP_TEXT = (
     "確定 1       -> 確定\n"
     "削除 3       -> 候補削除"
 )
+
+SHOP_PRESETS = [
+    {"name": "和食 さくら", "desc": "落ち着いた和食"},
+    {"name": "ビストロ青空", "desc": "カジュアルに洋食"},
+    {"name": "中華 福来", "desc": "がっつり中華"},
+    {"name": "焼肉 まる", "desc": "しっかり食べたい"},
+    {"name": "居酒屋 ほし", "desc": "飲みメイン"},
+]
 
 
 def should_handle_text(event: Dict[str, Any], bot_mention: Optional[str] = None) -> bool:
@@ -158,20 +167,33 @@ async def handle_line_events(events: List[Dict[str, Any]]) -> None:
             reply_token = event.get("replyToken")
             response = await _route_message(event, message)
             if reply_token and response:
-                await reply_text(reply_token, response)
+                if isinstance(response, str):
+                    await reply_text(reply_token, response)
+                else:
+                    await reply_carousel(
+                        reply_token,
+                        response.get("alt_text", "投票"),
+                        response.get("columns", []),
+                    )
+        elif event.get("type") == "postback":
+            await _handle_postback(event)
         else:
             print(f"[LINE] skipped event type={event.get('type')}")
 
 
-async def _route_message(event: Dict[str, Any], message: str) -> Optional[str]:
+async def _route_message(
+    event: Dict[str, Any],
+    message: str,
+) -> Optional[Union[str, Dict[str, Any]]]:
     group_id = _conversation_id(event)
     user_id = event.get("source", {}).get("userId", "")
     session = get_active_session(group_id)
+    is_shop_session = bool(session and session.get("settings", {}).get("mode") == "shop")
 
     if message in {"ヘルプ", "help", "?"}:
         return HELP_TEXT
 
-    if session and session["state"] == "pending_defaults":
+    if session and session["state"] == "pending_defaults" and not is_shop_session:
         if message in {"OK", "ok", "はい", "開始", "デフォルト"}:
             generate_default_options(session["id"], session["settings"])
             update_session_state(session["id"], "voting")
@@ -201,7 +223,7 @@ async def _route_message(event: Dict[str, Any], message: str) -> Optional[str]:
             return f"時間帯を{start_time}-{end_time}に更新しました。\nOKで候補を作成します。"
 
     if message.startswith("開始"):
-        if session:
+        if session and not is_shop_session:
             options = list_options(session["id"])
             return "すでに進行中の投票があります。\n" + _format_options(options)
         topic = message.replace("開始", "", 1).strip() or "予定調整"
@@ -209,7 +231,7 @@ async def _route_message(event: Dict[str, Any], message: str) -> Optional[str]:
         return f"「{topic}」の投票を開始します。\n{DEFAULT_PROMPT}"
 
     if message.startswith("候補"):
-        if not session:
+        if not session or is_shop_session:
             return "先に「開始 <タイトル>」で投票を始めてください。"
         parsed = _parse_candidate(message)
         if not parsed:
@@ -220,7 +242,7 @@ async def _route_message(event: Dict[str, Any], message: str) -> Optional[str]:
         return "候補を追加しました。\n" + _format_options(options)
 
     if message.startswith("削除"):
-        if not session:
+        if not session or is_shop_session:
             return "削除する投票が見つかりません。"
         match = re.search(r"(\d+)", message)
         if not match:
@@ -234,13 +256,13 @@ async def _route_message(event: Dict[str, Any], message: str) -> Optional[str]:
         return "候補を削除しました。\n" + _format_options(options)
 
     if message in {"候補一覧", "一覧", "リスト", "集計"}:
-        if not session:
+        if not session or is_shop_session:
             return "進行中の投票がありません。"
         options = list_options(session["id"])
         return _format_options(options)
 
     if message.startswith("確定"):
-        if not session:
+        if not session or is_shop_session:
             return "進行中の投票がありません。"
         match = re.search(r"(\d+)", message)
         if not match:
@@ -256,7 +278,7 @@ async def _route_message(event: Dict[str, Any], message: str) -> Optional[str]:
         return f"候補を確定しました。{start}-{end}"
 
     if re.fullmatch(r"\d+", message):
-        if not session:
+        if not session or is_shop_session:
             return "進行中の投票がありません。"
         options = list_options(session["id"])
         index = int(message)
@@ -266,4 +288,94 @@ async def _route_message(event: Dict[str, Any], message: str) -> Optional[str]:
         options = list_options(session["id"])
         return "投票を受け付けました。\n" + _format_options(options)
 
+    if message == "test":
+        if session and not is_shop_session:
+            return "別の投票が進行中です。終了してから試してください。"
+        columns = _ensure_shop_poll(group_id, user_id, session)
+        return {"alt_text": "お店投票", "columns": columns}
+
+    if message.startswith("予約"):
+        if not session or not is_shop_session:
+            return "お店投票が進行中ではありません。"
+        options = list_options(session["id"])
+        return _format_shop_recommendation(options)
+
     return None
+
+
+def _ensure_shop_poll(
+    group_id: str,
+    user_id: str,
+    session: Optional[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    if session and session.get("settings", {}).get("mode") == "shop":
+        options = list_options(session["id"])
+        return _build_shop_columns(session["id"], options, None)
+
+    session_id = create_session(group_id, "お店投票", user_id)
+    update_session_settings(session_id, {"mode": "shop"})
+    update_session_state(session_id, "shop_voting")
+    clear_options(session_id)
+    now = datetime.now()
+    options_with_meta = []
+    for idx, preset in enumerate(SHOP_PRESETS):
+        start_dt = now + timedelta(minutes=idx)
+        end_dt = start_dt + timedelta(hours=1)
+        option_id = add_option(session_id, start_dt, end_dt, preset["name"], user_id)
+        options_with_meta.append({"id": option_id, "label": preset["name"], "desc": preset["desc"]})
+    return _build_shop_columns(session_id, options_with_meta, "desc")
+
+
+def _build_shop_columns(
+    session_id: int,
+    options: List[Dict[str, Any]],
+    desc_key: Optional[str],
+) -> List[Dict[str, Any]]:
+    columns = []
+    for option in options:
+        description = option.get(desc_key) if desc_key else None
+        columns.append(
+            {
+                "title": option["label"][:40],
+                "text": (description or "このお店に投票しますか？")[:60],
+                "actions": [
+                    {
+                        "type": "postback",
+                        "label": "投票する",
+                        "data": f"shop_vote:{session_id}:{option['id']}",
+                    }
+                ],
+            }
+        )
+    return columns
+
+
+def _format_shop_recommendation(options: List[Dict[str, Any]]) -> str:
+    if not options:
+        return "投票対象がありません。"
+    max_votes = max(option.get("votes", 0) for option in options)
+    if max_votes == 0:
+        return "まだ投票がありません。"
+    winners = [opt["label"] for opt in options if opt.get("votes", 0) == max_votes]
+    if len(winners) == 1:
+        return f"現状「{winners[0]}」が人気だけど、この店にしますか？"
+    joined = " / ".join(winners)
+    return f"現状同率で人気: {joined}。どの店にしますか？"
+
+
+async def _handle_postback(event: Dict[str, Any]) -> None:
+    data = event.get("postback", {}).get("data", "")
+    if not data.startswith("shop_vote:"):
+        return
+    parts = data.split(":")
+    if len(parts) != 3:
+        return
+    try:
+        session_id = int(parts[1])
+        option_id = int(parts[2])
+    except ValueError:
+        return
+    user_id = event.get("source", {}).get("userId", "")
+    if not user_id:
+        return
+    record_vote(session_id, option_id, user_id)
