@@ -98,6 +98,15 @@ CREATE TABLE IF NOT EXISTS poll_sessions (
     state VARCHAR(32) NOT NULL DEFAULT 'pending',
     created_by_line_user_id VARCHAR(64),
     settings_json JSON,
+    event_registered BOOLEAN DEFAULT FALSE,
+    finalized_date VARCHAR(255),
+    finalized_start_time TIME,
+    finalized_end_time TIME,
+    finalized_location VARCHAR(255),
+    restaurant_id VARCHAR(255),
+    restaurant_name VARCHAR(255),
+    restaurant_url TEXT,
+    reservation_confirmed BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_group_id (group_id),
@@ -177,6 +186,19 @@ CREATE TABLE IF NOT EXISTS restaurant_votes (
     UNIQUE KEY uniq_vote_per_session_user (session_id, line_user_id),
     INDEX idx_session_id (session_id),
     INDEX idx_shop_id (shop_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+-- Adjustment events (voting deadlines per session)
+CREATE TABLE IF NOT EXISTS adjustment_events (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    session_id INT NOT NULL,
+    group_id VARCHAR(64),
+    deadline DATETIME NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uniq_session (session_id),
+    INDEX idx_session_id (session_id),
+    INDEX idx_group_id (group_id),
+    INDEX idx_deadline (deadline)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Sample data (development only)

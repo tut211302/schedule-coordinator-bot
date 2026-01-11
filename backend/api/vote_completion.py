@@ -10,6 +10,7 @@ from db import get_connection
 from db.restaurant_conditions import get_aggregated_conditions
 from api.hotpepper import search_restaurants, create_line_carousel_message
 from line.reply import push_message, multicast_message
+from services.google_calendar_service import create_event_for_session
 
 
 vote_completion_router = APIRouter()
@@ -57,15 +58,15 @@ def get_vote_results(session_id: int) -> List[Dict]:
     """Get aggregated vote results for a session."""
     query = """
         SELECT 
-            pr.date_label,
+            pr.selected_date AS date_label,
             pr.start_time,
             pr.end_time,
-            COUNT(*) as vote_count,
-            GROUP_CONCAT(DISTINCT lu.display_name SEPARATOR ', ') as voters
+            COUNT(*) AS vote_count,
+            GROUP_CONCAT(DISTINCT lu.display_name SEPARATOR ', ') AS voters
         FROM poll_responses pr
         LEFT JOIN line_users lu ON pr.line_user_id = lu.line_user_id
         WHERE pr.session_id = %s
-        GROUP BY pr.date_label, pr.start_time, pr.end_time
+        GROUP BY pr.selected_date, pr.start_time, pr.end_time
         ORDER BY vote_count DESC, pr.start_time ASC
     """
     with get_connection() as conn:
@@ -225,4 +226,113 @@ async def get_session_results(session_id: int):
         "voters": voters,
         "vote_results": vote_results,
         "restaurant_conditions": conditions
+    }
+
+
+@vote_completion_router.post("/api/votes/finalize/{session_id}")
+async def finalize_and_register_event(
+    session_id: int,
+    event_title: str = "飲み会",
+    location: Optional[str] = None
+):
+    """
+    Finalize voting and automatically register calendar events for all participants.
+    
+    This endpoint:
+    1. Gets the top voted date/time
+    2. Creates calendar events for all users who have Google Calendar connected
+    3. Saves event records to database
+    4. Sends confirmation to LINE group
+    
+    Args:
+        session_id: Poll session ID
+        event_title: Title for the calendar event (default: "飲み会")
+        location: Optional location/restaurant name
+    
+    Returns:
+        Dict with success status, created events, and messaging results
+    """
+    # Check if already finalized
+    check_query = "SELECT event_registered FROM poll_sessions WHERE id = %s"
+    with get_connection() as conn:
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute(check_query, (session_id,))
+        session = cursor.fetchone()
+        
+        if session and session.get("event_registered"):
+            raise HTTPException(
+                status_code=400,
+                detail="This session has already been finalized and events have been created"
+            )
+    
+    # 1. Get voting results
+    vote_results = get_vote_results(session_id)
+    
+    if not vote_results or len(vote_results) == 0:
+        raise HTTPException(status_code=400, detail="No votes found for this session")
+    
+    # Get the top voted date/time
+    top_result = vote_results[0]
+    date_label = top_result["date_label"]
+    start_time = top_result["start_time"]
+    end_time = top_result["end_time"]
+    vote_count = top_result["vote_count"]
+    voters_list = top_result.get("voters", "")
+    
+    # 2. Update poll_sessions to mark as finalized (date decided, not calendar event yet)
+    # Calendar event will be created after restaurant is confirmed
+    update_query = """
+        UPDATE poll_sessions 
+        SET event_registered = FALSE,
+            state = 'finalized',
+            topic = %s,
+            finalized_date = %s,
+            finalized_start_time = %s,
+            finalized_end_time = %s,
+            finalized_location = %s
+        WHERE id = %s
+    """
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(update_query, (event_title, date_label, start_time, end_time, location, session_id))
+        conn.commit()
+    
+    # 3. Prepare LINE notification message
+    notification_text = f"🎉 日程が確定しました！\n\n"
+    notification_text += f"📅 日時: {date_label} {start_time}～{end_time}\n"
+    
+    if location:
+        notification_text += f"📍 場所: {location}\n"
+    
+    notification_text += f"👥 参加者: {vote_count}人\n"
+    notification_text += f"   {voters_list}\n\n"
+    notification_text += "次は、お店の投票です！\nお店が決まったら、自動でカレンダーに登録します。"
+    
+    # 4. Send notification to LINE
+    messages = [{"type": "text", "text": notification_text}]
+    
+    send_success = False
+    group_id = get_session_group_id(session_id)
+    
+    if group_id:
+        send_success = await push_message(group_id, messages)
+    
+    if not send_success:
+        voters = get_session_voters(session_id)
+        voter_ids = [v["line_user_id"] for v in voters if v.get("line_user_id")]
+        if voter_ids:
+            send_success = await multicast_message(voter_ids, messages)
+    
+    return {
+        "success": True,
+        "session_id": session_id,
+        "finalized_date": {
+            "date_label": date_label,
+            "start_time": start_time,
+            "end_time": end_time,
+            "vote_count": vote_count,
+            "voters": voters_list
+        },
+        "notification_sent": send_success,
+        "message": f"日程を確定しました。次はお店選択です。"
     }
