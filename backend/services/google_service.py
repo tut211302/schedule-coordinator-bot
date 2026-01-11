@@ -34,7 +34,7 @@ class GoogleOAuthClient:
             Authorization URL for redirect
         """
         # Scopes for calendar access
-        scopes = "openid profile email https://www.googleapis.com/auth/calendar.readonly"
+        scopes = "openid profile email https://www.googleapis.com/auth/calendar.events"
 
         params = {
             "client_id": self.client_id,
@@ -81,6 +81,21 @@ class GoogleOAuthClient:
                     return token_response
         except Exception as e:
             raise Exception(f"Token exchange error: {str(e)}")
+
+    async def fetch_user_info(self, access_token: str) -> dict[str, Any]:
+        """
+        Fetch Google profile information for the authenticated user.
+        """
+        headers = {"Authorization": f"Bearer {access_token}"}
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(self.userinfo_endpoint, headers=headers) as resp:
+                    if resp.status != 200:
+                        error_text = await resp.text()
+                        raise Exception(f"Userinfo fetch failed: {resp.status} {error_text}")
+                    return await resp.json()
+        except Exception as e:
+            raise Exception(f"Userinfo fetch error: {str(e)}")
 
     async def refresh_access_token(self, refresh_token: str) -> dict[str, Any]:
         """

@@ -30,6 +30,8 @@ class UserGoogleAuth(BaseModel):
     refresh_token: Optional[str] = None
     token_expiry: datetime
     calendar_connected: bool = True
+    google_id: Optional[str] = None
+    email: Optional[str] = None
 
 
 class UserInDBBase(UserBase):

@@ -17,10 +17,19 @@ npm install
 ```env
 REACT_APP_GOOGLE_CLIENT_ID=your-google-client-id-here.apps.googleusercontent.com
 REACT_APP_BACKEND_URL=http://localhost:8000
+REACT_APP_LIFF_ID=your-liff-id
+GOOGLE_CLIENT_ID=your-google-client-id-here.apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=your-google-client-secret
+GOOGLE_REDIRECT_URI=http://localhost:8000/google/callback
+LIFF_ID=your-liff-id
 ```
 
 - `REACT_APP_GOOGLE_CLIENT_ID`: Google Cloud ConsoleからOAuth 2.0クライアントIDを取得して設定
 - `REACT_APP_BACKEND_URL`: バックエンドAPIのURL
+- `REACT_APP_LIFF_ID`: LINE Developersで発行したLIFF ID
+- `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET`: バックエンドのGoogle OAuth用
+- `GOOGLE_REDIRECT_URI`: Google OAuthのコールバックURL（例: `http://localhost:8000/google/callback`）
+- `LIFF_ID`: バックエンドがLINEに返すLIFF URL生成用
 
 ### 3. Google Cloud Consoleの設定
 

@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useState, useMemo, useCallback } from 'react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 
@@ -69,6 +69,7 @@ export default function PollPlaceholder() {
   const [selectedCandidates, setSelectedCandidates] = useState(new Set());
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
+  const [authStatus, setAuthStatus] = useState('');
   
   // 投票状況のステート
   const [totalVoters, setTotalVoters] = useState(0);
@@ -101,7 +102,8 @@ export default function PollPlaceholder() {
 
     try {
       setIsLoadingSummary(true);
-      const response = await axios.get(`${backendUrl}/api/events/${sessionId}/summary`, {
+      const response = await axios.get(`${backendUrl}/api/events/votes/summary`, {
+        params: { session_id: sessionId },
         withCredentials: true,
       });
       
@@ -137,6 +139,10 @@ export default function PollPlaceholder() {
     if (!pathSessionId && querySessionId) {
       setSessionId(querySessionId);
     }
+    const googleAuth = params.get('google_auth');
+    if (googleAuth) {
+      setAuthStatus(googleAuth);
+    }
   }, [pathSessionId]);
 
   // LIFF初期化
@@ -169,7 +175,7 @@ export default function PollPlaceholder() {
         setStatus('');
 
         // Register user to backend
-        const response = await fetch(`${backendUrl}/api/line/link`, {
+        const response = await fetch(`${backendUrl}/users/api/line/link`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -283,11 +289,19 @@ export default function PollPlaceholder() {
   // Google連携画面へ遷移
   const handleGoToGoogleAuth = async () => {
     try {
-      const response = await axios.get(`${backendUrl}/api/auth/google/login`, {
-        withCredentials: true,
-      });
-      if (response.data.authUrl) {
-        window.location.href = response.data.authUrl;
+      if (!lineUserId) {
+        setStatus('LINEユーザーIDが取得できていません。');
+        return;
+      }
+      const redirectUrl = window.location.href.split('#')[0];
+      const response = await axios.get(
+        `${backendUrl}/google/login/${lineUserId}?redirect_url=${encodeURIComponent(redirectUrl)}`,
+        {
+          withCredentials: true,
+        }
+      );
+      if (response.data.auth_url) {
+        window.location.href = response.data.auth_url;
       }
     } catch (error) {
       console.error('Google認証URLの取得に失敗:', error);
@@ -358,6 +372,16 @@ export default function PollPlaceholder() {
       {status && (
         <div className="bg-yellow-50 border-l-4 border-yellow-400 text-yellow-800 py-3 px-5 text-sm">
           {status}
+        </div>
+      )}
+      {authStatus === 'success' && (
+        <div className="bg-green-50 border-l-4 border-green-400 text-green-800 py-3 px-5 text-sm">
+          Google連携が完了しました。
+        </div>
+      )}
+      {authStatus === 'error' && (
+        <div className="bg-red-50 border-l-4 border-red-400 text-red-800 py-3 px-5 text-sm">
+          Google連携に失敗しました。
         </div>
       )}
 
@@ -523,7 +547,7 @@ export default function PollPlaceholder() {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[100] p-4">
           <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-xl">
             <div className="text-center">
-              <div className="text-5xl mb-4">�</div>
+              <div className="text-5xl mb-4">🔗</div>
               <h2 className="text-xl font-bold text-gray-800 mb-2">
                 Googleカレンダー連携が必要です
               </h2>

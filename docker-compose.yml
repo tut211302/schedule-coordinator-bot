@@ -12,7 +12,7 @@ services:
       - .:/workspace
       - /workspace/node_modules
     environment:
-      REACT_APP_BACKEND_URL: http://localhost:8000
+      REACT_APP_BACKEND_URL: ${REACT_APP_BACKEND_URL:-http://localhost:8000}
       REACT_APP_GOOGLE_CLIENT_ID: ${REACT_APP_GOOGLE_CLIENT_ID:-}
       NODE_ENV: development
     depends_on:
