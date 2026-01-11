@@ -165,6 +165,20 @@ CREATE TABLE IF NOT EXISTS restaurant_conditions (
     INDEX idx_session_id (session_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- Adjustment events (voting deadlines per session)
+CREATE TABLE IF NOT EXISTS adjustment_events (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    session_id INT NOT NULL,
+    group_id VARCHAR(64),
+    deadline DATETIME NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uniq_session (session_id),
+    INDEX idx_session_id (session_id),
+    INDEX idx_group_id (group_id),
+    INDEX idx_deadline (deadline)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- Sample data (development only)
 INSERT INTO users (email, calendar_connected) VALUES
 ('test@example.com', FALSE)

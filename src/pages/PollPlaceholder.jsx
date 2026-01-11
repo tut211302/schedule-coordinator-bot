@@ -84,6 +84,11 @@ export default function PollPlaceholder() {
   // アンケートへの遷移確認用のstate
   const [showSurveyPrompt, setShowSurveyPrompt] = useState(false);
 
+  // 投票期限のstate
+  const [deadline, setDeadline] = useState(null);
+  const [isDeadlineExpired, setIsDeadlineExpired] = useState(false);
+  const [remainingTime, setRemainingTime] = useState(null);
+
   // 候補日時リストを生成（メモ化）
   const candidates = useMemo(() => generateDefaultCandidates(), []);
 
@@ -118,10 +123,56 @@ export default function PollPlaceholder() {
     }
   }, [sessionId]);
 
+  // 投票期限を取得・作成
+  const fetchDeadline = useCallback(async () => {
+    if (!sessionId) return;
+
+    try {
+      // セッションIDがある場合、期限を確保（なければ作成）
+      const response = await axios.post(
+        `${backendUrl}/api/events/deadline/${sessionId}/ensure`,
+        {},
+        { withCredentials: true }
+      );
+
+      if (response.data.deadline) {
+        const deadlineDate = new Date(response.data.deadline);
+        setDeadline(deadlineDate);
+        setIsDeadlineExpired(response.data.is_expired || false);
+        
+        // 残り時間を計算
+        const now = new Date();
+        const remaining = Math.max(0, Math.floor((deadlineDate - now) / 1000));
+        setRemainingTime(remaining);
+      }
+    } catch (error) {
+      console.error('投票期限の取得に失敗:', error);
+    }
+  }, [sessionId]);
+
+  // 残り時間のカウントダウン
+  useEffect(() => {
+    if (!deadline) return;
+
+    const timer = setInterval(() => {
+      const now = new Date();
+      const remaining = Math.max(0, Math.floor((deadline - now) / 1000));
+      setRemainingTime(remaining);
+      
+      if (remaining <= 0) {
+        setIsDeadlineExpired(true);
+        clearInterval(timer);
+      }
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [deadline]);
+
   // 初期ロード時とセッションID変更時にサマリーを取得
   useEffect(() => {
     fetchVoteSummary();
-  }, [fetchVoteSummary]);
+    fetchDeadline();
+  }, [fetchVoteSummary, fetchDeadline]);
 
   // 初期状態で全ての候補を選択済みにする
   useEffect(() => {
@@ -238,6 +289,12 @@ export default function PollPlaceholder() {
 
   // 確定ボタン押下時の処理
   const handleConfirm = async () => {
+    // 期限切れチェック
+    if (isDeadlineExpired) {
+      setStatus('投票期限が終了しました。これ以上投票できません。');
+      return;
+    }
+
     if (selectedCandidates.size === 0) {
       setStatus('少なくとも1つの日程を選択してください。');
       return;
@@ -281,7 +338,13 @@ export default function PollPlaceholder() {
 
     } catch (error) {
       console.error('処理に失敗しました:', error);
-      setStatus('処理に失敗しました。もう一度お試しください。');
+      // 期限切れエラーの場合は特別なメッセージ
+      if (error.response?.status === 403) {
+        setStatus('投票期限が終了しました。これ以上投票できません。');
+        setIsDeadlineExpired(true);
+      } else {
+        setStatus('処理に失敗しました。もう一度お試しください。');
+      }
       setIsSubmitting(false);
     }
   };
@@ -339,19 +402,75 @@ export default function PollPlaceholder() {
     return votersByOption[label] || [];
   };
 
+  // 残り時間のフォーマット
+  const formatRemainingTime = () => {
+    if (remainingTime === null) return '';
+    if (remainingTime <= 0) return '期限切れ';
+    
+    const minutes = Math.floor(remainingTime / 60);
+    const seconds = remainingTime % 60;
+    
+    if (minutes >= 60) {
+      const hours = Math.floor(minutes / 60);
+      const mins = minutes % 60;
+      return `${hours}時間${mins}分`;
+    }
+    return `${minutes}分${seconds.toString().padStart(2, '0')}秒`;
+  };
+
+  // 期限日時のフォーマット
+  const formatDeadline = () => {
+    if (!deadline) return '';
+    const month = deadline.getMonth() + 1;
+    const day = deadline.getDate();
+    const hours = deadline.getHours().toString().padStart(2, '0');
+    const minutes = deadline.getMinutes().toString().padStart(2, '0');
+    return `${month}月${day}日 ${hours}:${minutes}`;
+  };
+
   const isAllSelected = selectedCandidates.size === candidates.length;
   const isNoneSelected = selectedCandidates.size === 0;
-  const isButtonEnabled = selectedCandidates.size > 0 && !isSubmitting;
+  const isButtonEnabled = selectedCandidates.size > 0 && !isSubmitting && !isDeadlineExpired;
 
   return (
-    <div className="min-h-screen bg-gray-50 font-sans pb-32">
+    <div className={`min-h-screen font-sans pb-32 ${isDeadlineExpired ? 'bg-gray-100' : 'bg-gray-50'}`}>
       {/* ヘッダー */}
-      <header className="bg-line-green text-white py-6 px-5 text-center shadow-md">
+      <header className={`text-white py-6 px-5 text-center shadow-md ${isDeadlineExpired ? 'bg-gray-500' : 'bg-line-green'}`}>
         <h1 className="text-2xl font-bold mb-2">📅 候補日程の確認</h1>
         <p className="text-sm opacity-90">
-          不要な日程のチェックを外してください
+          {isDeadlineExpired ? '投票期限が終了しました' : '不要な日程のチェックを外してください'}
         </p>
       </header>
+
+      {/* 投票期限バナー */}
+      {deadline && (
+        <div className={`py-3 px-5 text-center ${
+          isDeadlineExpired 
+            ? 'bg-red-100 border-b-2 border-red-300' 
+            : remainingTime && remainingTime < 60 
+              ? 'bg-yellow-100 border-b-2 border-yellow-300'
+              : 'bg-blue-50 border-b border-blue-200'
+        }`}>
+          <div className="flex items-center justify-center gap-2">
+            <span className={`text-lg ${isDeadlineExpired ? 'text-red-600' : 'text-blue-700'}`}>
+              ⏰
+            </span>
+            <span className={`font-semibold ${isDeadlineExpired ? 'text-red-700' : 'text-blue-800'}`}>
+              投票期限：{formatDeadline()} まで
+            </span>
+          </div>
+          {!isDeadlineExpired && remainingTime !== null && (
+            <p className={`text-sm mt-1 ${remainingTime < 60 ? 'text-yellow-700 font-bold' : 'text-blue-600'}`}>
+              残り {formatRemainingTime()}
+            </p>
+          )}
+          {isDeadlineExpired && (
+            <p className="text-sm mt-1 text-red-600 font-bold">
+              ⚠️ 投票受付は終了しました
+            </p>
+          )}
+        </div>
+      )}
 
       {/* 参加状況バッジ */}
       <div className="bg-white border-b border-gray-200 py-4 px-5">
@@ -508,40 +627,6 @@ export default function PollPlaceholder() {
         })}
       </div>
 
-      {/* プログレスサマリー */}
-      {totalVoters > 0 && (
-        <div className="mx-4 mb-4 bg-white rounded-2xl p-4 shadow-sm">
-          <h3 className="text-sm font-semibold text-gray-700 mb-3">📊 投票状況</h3>
-          <div className="space-y-2">
-            {candidates
-              .map((c) => ({ label: c.label, votes: getVoteCount(c.label) }))
-              .sort((a, b) => b.votes - a.votes)
-              .slice(0, 5)
-              .map((item, idx) => (
-                <div key={idx} className="flex items-center gap-2">
-                  <span className="text-xs text-gray-500 w-24 truncate">
-                    {item.label.split(' ')[0]}
-                  </span>
-                  <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
-                    <div 
-                      className={`h-full rounded-full transition-all duration-500 ${
-                        idx === 0 ? 'bg-line-green' : 'bg-blue-400'
-                      }`}
-                      style={{ 
-                        width: `${maxVotes > 0 ? (item.votes / maxVotes) * 100 : 0}%` 
-                      }}
-                    />
-                  </div>
-                  <span className="text-xs font-medium text-gray-600 w-8 text-right">
-                    {item.votes}人
-                  </span>
-                </div>
-              ))
-            }
-          </div>
-        </div>
-      )}
-
       {/* Google連携ポップアップ */}
       {showGooglePrompt && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[100] p-4">
@@ -611,7 +696,9 @@ export default function PollPlaceholder() {
       )}
 
       {/* 固定フッター */}
-      <footer className="fixed bottom-0 left-0 right-0 bg-white py-4 px-5 shadow-[0_-4px_20px_rgba(0,0,0,0.1)] z-50 border-t border-gray-100">
+      <footer className={`fixed bottom-0 left-0 right-0 py-4 px-5 shadow-[0_-4px_20px_rgba(0,0,0,0.1)] z-50 border-t ${
+        isDeadlineExpired ? 'bg-gray-100 border-gray-200' : 'bg-white border-gray-100'
+      }`}>
         <div className="max-w-lg mx-auto">
           <button
             onClick={handleConfirm}
@@ -619,12 +706,16 @@ export default function PollPlaceholder() {
             className={`
               w-full py-4 px-6 text-lg font-bold text-white 
               rounded-2xl transition-all duration-200 shadow-lg
-              ${isButtonEnabled 
-                ? 'bg-line-green cursor-pointer hover:bg-green-600 active:scale-[0.98] shadow-green-200' 
-                : 'bg-gray-300 cursor-not-allowed shadow-none'}
+              ${isDeadlineExpired
+                ? 'bg-gray-400 cursor-not-allowed shadow-none'
+                : isButtonEnabled 
+                  ? 'bg-line-green cursor-pointer hover:bg-green-600 active:scale-[0.98] shadow-green-200' 
+                  : 'bg-gray-300 cursor-not-allowed shadow-none'}
             `}
           >
-            {isSubmitting ? (
+            {isDeadlineExpired ? (
+              '⏰ 投票期限が終了しました'
+            ) : isSubmitting ? (
               <span className="flex items-center justify-center gap-2">
                 <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
@@ -639,9 +730,11 @@ export default function PollPlaceholder() {
             )}
           </button>
           <p className="text-xs text-gray-400 text-center mt-2">
-            {isVoteSaved 
-              ? '選択を変更して再投票することもできます'
-              : '選択した日程で投票します'}
+            {isDeadlineExpired
+              ? '投票受付は終了しています'
+              : isVoteSaved 
+                ? '選択を変更して再投票することもできます'
+                : '選択した日程で投票します'}
           </p>
         </div>
       </footer>

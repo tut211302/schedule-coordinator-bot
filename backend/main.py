@@ -15,6 +15,7 @@ from routers import user, line_auth, google_auth
 from api.vote import vote_router
 from api.survey import survey_router
 from api.vote_completion import vote_completion_router
+from api.deadline import deadline_router
 
 # Load environment variables
 load_dotenv()
@@ -82,6 +83,7 @@ app.include_router(line_api_router)
 
 app.include_router(survey_router)
 app.include_router(vote_completion_router)
+app.include_router(deadline_router, tags=["期限管理"])
 app.include_router(vote_router, tags=["投票"])
 
 
