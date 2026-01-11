@@ -8,7 +8,7 @@ from line.reply import reply_messages, reply_text
 from api.hotpepper import create_line_carousel_message, fetch_restaurant_by_id, search_restaurants
 from db.poll_responses import get_top_voted_slot
 from db.restaurant_conditions import get_aggregated_conditions
-from db.restaurant_votes import get_top_restaurant, save_restaurant_vote
+from utils.hotpepper_codes import get_genre_name, get_budget_name
 from db.poll import (
     close_session,
     create_session,
@@ -154,10 +154,14 @@ def _format_condition_summary(conditions: Dict[str, Any]) -> str:
     if conditions.get("most_common_area"):
         lines.append(f"エリア: {conditions['most_common_area']}")
     if conditions.get("most_common_genres"):
-        genres = ", ".join(conditions["most_common_genres"][:2])
+        # ジャンルコードを日本語名に変換
+        genre_names = [get_genre_name(code) for code in conditions["most_common_genres"][:2]]
+        genres = ", ".join(genre_names)
         lines.append(f"ジャンル: {genres}")
     if conditions.get("most_common_budget"):
-        lines.append(f"予算: {conditions['most_common_budget']}")
+        # 予算コードを日本語名に変換
+        budget_name = get_budget_name(conditions['most_common_budget'])
+        lines.append(f"予算: {budget_name}")
     if not lines:
         return "まだ検索条件が集まっていません。"
     return "\n".join(lines)
