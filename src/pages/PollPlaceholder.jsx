@@ -4,6 +4,7 @@ import axios from 'axios';
 
 const backendUrl = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8000';
 const liffId = process.env.REACT_APP_LIFF_ID || '';
+const ngrokHeaders = { 'ngrok-skip-browser-warning': '1' };
 
 const getWindowLiff = () => window.liff;
 
@@ -109,7 +110,7 @@ export default function PollPlaceholder() {
       setIsLoadingSummary(true);
       const response = await axios.get(`${backendUrl}/api/events/votes/summary`, {
         params: { session_id: sessionId },
-        withCredentials: true,
+        headers: { ...ngrokHeaders },
       });
       
       setTotalVoters(response.data.total_voters || 0);
@@ -228,7 +229,7 @@ export default function PollPlaceholder() {
         // Register user to backend
         const response = await fetch(`${backendUrl}/users/api/line/link`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...ngrokHeaders },
           body: JSON.stringify({
             line_user_id: profile.userId,
             display_name: profile.displayName,
@@ -304,6 +305,22 @@ export default function PollPlaceholder() {
     setStatus('');
 
     try {
+      if (!lineUserId) {
+        setStatus('LINEユーザーIDが取得できていません。');
+        setIsSubmitting(false);
+        return;
+      }
+
+      const linkStatus = await axios.get(`${backendUrl}/users/${lineUserId}`, {
+        headers: { ...ngrokHeaders },
+      });
+      if (!linkStatus.data?.calendar_connected) {
+        setShowGooglePrompt(true);
+        setStatus('Googleカレンダー連携が必要です。');
+        setIsSubmitting(false);
+        return;
+      }
+
       // 選択された日程リストを取得
       const selectedItems = candidates.filter((c) => selectedCandidates.has(c.id));
       
@@ -320,7 +337,7 @@ export default function PollPlaceholder() {
         session_id: sessionId ? parseInt(sessionId, 10) : null,
         votes: votesData
       }, {
-        withCredentials: true
+        headers: { ...ngrokHeaders },
       });
 
       console.log('投票を保存しました:', votesData.length, '件');
@@ -360,7 +377,7 @@ export default function PollPlaceholder() {
       const response = await axios.get(
         `${backendUrl}/google/login/${lineUserId}?redirect_url=${encodeURIComponent(redirectUrl)}`,
         {
-          withCredentials: true,
+          headers: { ...ngrokHeaders },
         }
       );
       if (response.data.auth_url) {

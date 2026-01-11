@@ -3,6 +3,7 @@ Hotpepper API client for restaurant search.
 """
 
 import os
+import json
 import aiohttp
 from typing import Dict, List, Optional
 from urllib.parse import urlencode
@@ -79,7 +80,20 @@ async def search_restaurants(
                         "shops": []
                     }
                 
-                data = await response.json()
+                # Hotpepper returns text/javascript;charset=utf-8 even for JSON
+                try:
+                    data = await response.json(content_type=None)
+                except Exception:
+                    text = await response.text()
+                    try:
+                        data = json.loads(text)
+                    except json.JSONDecodeError:
+                        return {
+                            "error": "Failed to decode API response",
+                            "results_available": 0,
+                            "results_returned": 0,
+                            "shops": []
+                        }
                 results = data.get("results", {})
                 
                 shops = results.get("shop", [])
