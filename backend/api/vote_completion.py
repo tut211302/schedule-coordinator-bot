@@ -160,7 +160,11 @@ async def trigger_completion(session_id: int, expected_voters: Optional[int] = N
         }
     
     # 4. Create LINE carousel message
-    carousel_message = create_line_carousel_message(shops, "🍻 おすすめのお店")
+    carousel_message = create_line_carousel_message(
+        shops,
+        "🍻 おすすめのお店",
+        session_id=session_id,
+    )
     
     # Create summary message
     top_date = completion_status["top_dates"][0] if completion_status["top_dates"] else None

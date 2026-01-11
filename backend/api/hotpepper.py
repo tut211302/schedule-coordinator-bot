@@ -149,7 +149,116 @@ async def search_restaurants(
         }
 
 
-def format_shops_for_line_carousel(shops: List[Dict], max_items: int = 10) -> List[Dict]:
+async def fetch_restaurant_by_id(shop_id: str) -> Dict:
+    """
+    Fetch a single restaurant by Hotpepper shop ID.
+    """
+    if not HOTPEPPER_API_KEY:
+        return {
+            "error": "HOTPEPPER_API_KEY is not configured",
+            "results_available": 0,
+            "results_returned": 0,
+            "shops": []
+        }
+
+    params = {
+        "key": HOTPEPPER_API_KEY,
+        "format": "json",
+        "id": shop_id,
+        "count": 1,
+    }
+    url = f"{HOTPEPPER_BASE_URL}?{urlencode(params)}"
+
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url) as response:
+                if response.status != 200:
+                    return {
+                        "error": f"API request failed with status {response.status}",
+                        "results_available": 0,
+                        "results_returned": 0,
+                        "shops": []
+                    }
+
+                try:
+                    data = await response.json(content_type=None)
+                except Exception:
+                    text = await response.text()
+                    try:
+                        data = json.loads(text)
+                    except json.JSONDecodeError:
+                        return {
+                            "error": "Failed to decode API response",
+                            "results_available": 0,
+                            "results_returned": 0,
+                            "shops": []
+                        }
+
+                results = data.get("results", {})
+                shops = results.get("shop", [])
+                if not shops:
+                    return {
+                        "results_available": 0,
+                        "results_returned": 0,
+                        "shops": []
+                    }
+
+                shop = shops[0]
+                formatted = {
+                    "id": shop.get("id"),
+                    "name": shop.get("name"),
+                    "name_kana": shop.get("name_kana"),
+                    "address": shop.get("address"),
+                    "station_name": shop.get("station_name"),
+                    "access": shop.get("access"),
+                    "url": shop.get("urls", {}).get("pc"),
+                    "photo": shop.get("photo", {}).get("pc", {}).get("l"),
+                    "photo_s": shop.get("photo", {}).get("pc", {}).get("s"),
+                    "genre": shop.get("genre", {}).get("name"),
+                    "budget": shop.get("budget", {}).get("name"),
+                    "budget_average": shop.get("budget", {}).get("average"),
+                    "open": shop.get("open"),
+                    "close": shop.get("close"),
+                    "catch": shop.get("catch"),
+                    "capacity": shop.get("capacity"),
+                    "private_room": shop.get("private_room"),
+                    "card": shop.get("card"),
+                    "non_smoking": shop.get("non_smoking"),
+                    "parking": shop.get("parking"),
+                    "lat": shop.get("lat"),
+                    "lng": shop.get("lng"),
+                }
+
+                return {
+                    "results_available": int(results.get("results_available", 0)),
+                    "results_returned": int(results.get("results_returned", 0)),
+                    "results_start": int(results.get("results_start", 1)),
+                    "shops": [formatted]
+                }
+
+    except aiohttp.ClientError as e:
+        return {
+            "error": f"Network error: {str(e)}",
+            "results_available": 0,
+            "results_returned": 0,
+            "shops": []
+        }
+    except Exception as e:
+        return {
+            "error": f"Unexpected error: {str(e)}",
+            "results_available": 0,
+            "results_returned": 0,
+            "shops": []
+        }
+
+
+def format_shops_for_line_carousel(
+    shops: List[Dict],
+    session_id: Optional[int] = None,
+    max_items: int = 10,
+    vote_label: str = "ここがいい！",
+    include_vote_action: bool = True,
+) -> List[Dict]:
     """
     Format shop data for LINE Flex Message carousel.
     
@@ -168,6 +277,31 @@ def format_shops_for_line_carousel(shops: List[Dict], max_items: int = 10) -> Li
         text = shop.get("catch", "") or shop.get("access", "") or ""
         text = text[:60] if text else "詳細はリンクをご確認ください"
         
+        postback_data = {
+            "action": "select_shop",
+            "shop_id": shop.get("id"),
+            "shop_name": shop.get("name", "")[:40],
+        }
+        if session_id is not None:
+            postback_data["session_id"] = session_id
+
+        actions = [
+            {
+                "type": "uri",
+                "label": "🔗 お店の詳細",
+                "uri": shop.get("url") or "https://www.hotpepper.jp/"
+            }
+        ]
+        if include_vote_action:
+            actions.append(
+                {
+                    "type": "postback",
+                    "label": vote_label,
+                    "displayText": vote_label,
+                    "data": urlencode(postback_data)
+                }
+            )
+
         column = {
             "thumbnailImageUrl": shop.get("photo") or shop.get("photo_s") or "https://via.placeholder.com/300x200",
             "imageBackgroundColor": "#FFFFFF",
@@ -178,18 +312,7 @@ def format_shops_for_line_carousel(shops: List[Dict], max_items: int = 10) -> Li
                 "label": "詳細を見る",
                 "uri": shop.get("url") or "https://www.hotpepper.jp/"
             },
-            "actions": [
-                {
-                    "type": "uri",
-                    "label": "🔗 お店の詳細",
-                    "uri": shop.get("url") or "https://www.hotpepper.jp/"
-                },
-                {
-                    "type": "postback",
-                    "label": "👍 ここにする！",
-                    "data": f"action=select_shop&shop_id={shop.get('id')}&shop_name={shop.get('name', '')[:20]}"
-                }
-            ]
+            "actions": actions,
         }
         
         columns.append(column)
@@ -197,7 +320,13 @@ def format_shops_for_line_carousel(shops: List[Dict], max_items: int = 10) -> Li
     return columns
 
 
-def create_line_carousel_message(shops: List[Dict], alt_text: str = "おすすめのお店") -> Dict:
+def create_line_carousel_message(
+    shops: List[Dict],
+    alt_text: str = "おすすめのお店",
+    session_id: Optional[int] = None,
+    vote_label: str = "ここがいい！",
+    include_vote_action: bool = True,
+) -> Dict:
     """
     Create a LINE Flex Message carousel from shop data.
     
@@ -208,7 +337,12 @@ def create_line_carousel_message(shops: List[Dict], alt_text: str = "おすす�
     Returns:
         LINE Flex Message dictionary
     """
-    columns = format_shops_for_line_carousel(shops)
+    columns = format_shops_for_line_carousel(
+        shops,
+        session_id=session_id,
+        vote_label=vote_label,
+        include_vote_action=include_vote_action,
+    )
     
     if not columns:
         return {
